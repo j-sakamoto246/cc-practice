@@ -2,7 +2,8 @@
 
 ## day1-hn-summary
 
-Hacker News のトップ記事を取得し、スコア/コメント比で並べ替えた Markdown レポートを生成する。
+HN / Lobsters / Dev.to / Reddit の複数ソースからニュースを取得し、スコア正規化した統合ランキングを生成する。
+WebSocket サーバーでリアルタイム配信、Claude による日本語訳付き。
 **Deno（TypeScript）版がメイン。** 旧シェルスクリプト版は `shell/` にアーカイブ。
 
 ### セットアップ
@@ -17,7 +18,11 @@ curl -fsSL https://deno.land/install.sh | sh
 ### コマンド集
 
 ```bash
-# HN トップ記事をMarkdownテーブルで表示
+# リアルタイムフィードサーバー（HN / Lobsters / Dev.to / Reddit + Claude 日本語訳）
+deno task server
+# → http://localhost:8080 をブラウザで開く
+
+# HN トップ記事を Markdown テーブルで表示
 deno task hn-top10
 
 # フォーマット指定（markdown / html / json）
@@ -26,7 +31,7 @@ deno run --allow-net main.ts --format json
 # コメント数フィルタ（コメント10件以上のみ）
 deno run --allow-net main.ts --min-comments 10
 
-# HN記事 + Claudeによる日本語サマリー生成（claude CLI 必須）
+# HN記事 + Claude による日本語サマリー生成（claude CLI 必須）
 deno task summary
 ```
 
@@ -42,7 +47,7 @@ deno task test
 | コマンド | 用途 | 必須スクリプト |
 |---|---|---|
 | `deno` | 実行・テスト（fetch 内蔵のため curl/jq 不要） | 全スクリプト |
-| `claude` | 日本語サマリー生成 | `summary.ts` のみ |
+| `claude` | 日本語訳・サマリー生成 | `server.ts` / `summary.ts` のみ |
 
 ### アーカイブ（旧シェルスクリプト版）
 
