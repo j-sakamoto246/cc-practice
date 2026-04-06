@@ -40,17 +40,20 @@ ${JSON.stringify(titles)}`;
     stderr: "inherit",
   });
 
+  console.log(`[translate] Spawning claude -p (${titles.length} titles)...`);
   const process = cmd.spawn();
   const writer = process.stdin.getWriter();
   await writer.write(new TextEncoder().encode(prompt));
   await writer.close();
 
-  const { stdout } = await process.output();
+  const { stdout, code } = await process.output();
   const raw = new TextDecoder().decode(stdout).trim();
+  console.log(`[translate] claude exited with code ${code}, response length=${raw.length}`);
+  console.log(`[translate] raw: ${raw.slice(0, 200)}`);
 
   // JSON 配列部分を抽出してパース
   const match = raw.match(/\[[\s\S]*\]/);
-  if (!match) throw new Error(`翻訳レスポンスのパースに失敗: ${raw.slice(0, 100)}`);
+  if (!match) throw new Error(`翻訳レスポンスのパースに失敗: ${raw.slice(0, 200)}`);
   const translated: unknown = JSON.parse(match[0]);
   if (!Array.isArray(translated) || translated.length !== titles.length) {
     throw new Error(`翻訳件数が不一致: expected ${titles.length}, got ${Array.isArray(translated) ? translated.length : "non-array"}`);
@@ -68,11 +71,12 @@ async function poll(): Promise<void> {
     // claude -p で日本語タイトルを付与
     let storiesWithJa: (typeof ranked[number] & { titleJa: string })[];
     try {
+      console.log(`[${new Date().toISOString()}] Starting translation (${ranked.length} titles)...`);
       const jatitles = await translateTitles(ranked.map((s) => s.title));
       storiesWithJa = ranked.map((s, i) => ({ ...s, titleJa: jatitles[i] }));
-      console.log(`[${new Date().toISOString()}] Translation done`);
+      console.log(`[${new Date().toISOString()}] Translation done. Example: "${jatitles[0]}"`);
     } catch (err) {
-      console.error("Translation failed, falling back to original titles:", err);
+      console.error(`[${new Date().toISOString()}] Translation failed, falling back to original titles:`, err);
       storiesWithJa = ranked.map((s) => ({ ...s, titleJa: s.title }));
     }
 
