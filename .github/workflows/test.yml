@@ -36,14 +36,17 @@ jobs:
         run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Run ShellCheck
-        run: shellcheck hn-top10.sh hn-summary.sh test_scripts.sh
+        run: shellcheck hn-top10.sh hn-summary.sh test_scripts.sh news-summary.sh test_adapters.sh lib/*.sh
 
       - name: Install dependencies (curl, jq)
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq curl jq
 
-      - name: Run tests
+      - name: Run adapter tests (mock data, no API)
+        run: bash test_adapters.sh
+
+      - name: Run integration tests (API access)
         run: bash test_scripts.sh
 
       - name: Notify Slack on failure

@@ -1,0 +1,5 @@
+[
+  {"title": "Dev.to Article Alpha", "url": "https://dev.to/a1", "positive_reactions_count": 500, "comments_count": 40},
+  {"title": "Dev.to Article Beta", "url": "https://dev.to/a2", "positive_reactions_count": 250, "comments_count": 20},
+  {"title": "Dev.to Article Gamma", "url": "https://dev.to/a3", "positive_reactions_count": 100, "comments_count": 10}
+]

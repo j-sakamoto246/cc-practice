@@ -1,0 +1,9 @@
+{
+  "data": {
+    "children": [
+      {"data": {"title": "Reddit Post Alpha", "url": "https://example.com/r1", "score": 5000, "num_comments": 300}},
+      {"data": {"title": "Reddit Post Beta", "url": "https://example.com/r2", "score": 3000, "num_comments": 150}},
+      {"data": {"title": "Reddit Post Gamma", "url": "https://example.com/r3", "score": 1000, "num_comments": 50}}
+    ]
+  }
+}

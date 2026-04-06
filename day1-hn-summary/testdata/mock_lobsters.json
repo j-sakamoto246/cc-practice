@@ -1,0 +1,5 @@
+[
+  {"title": "Lobsters Article Alpha", "url": "https://example.com/l1", "score": 30, "comment_count": 15, "short_id_url": "https://lobste.rs/s/abc"},
+  {"title": "Lobsters Article Beta", "url": "https://example.com/l2", "score": 60, "comment_count": 25, "short_id_url": "https://lobste.rs/s/def"},
+  {"title": "Lobsters Text Post", "url": "", "score": 10, "comment_count": 5, "short_id_url": "https://lobste.rs/s/ghi"}
+]
