@@ -4,27 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 概要
 
-Hacker News のトップ記事を取得し、スコア/コメント比で並べ替えた Markdown レポートを生成するスクリプト群。シェルスクリプト版（`main`）と Deno/TypeScript 版（`feature/deno-rewrite`）がある。
+Hacker News のトップ記事を取得し、スコア/コメント比で並べ替えた Markdown レポートを生成する。
+**Deno（TypeScript）版がメイン実装。** シェルスクリプト版は `shell/` にアーカイブ。
 
 ## 実行方法
 
-### シェルスクリプト版
-
 ```bash
-# 記事データのみ取得・表示（Markdown テーブル）
-./hn-top10.sh
-
-# 記事取得 + Claude Code による日本語サマリー生成（Markdown 全体）
-./hn-summary.sh
-```
-
-`hn-summary.sh` の実行には `claude` CLI（Claude Code）がインストールされ、認証済みである必要がある。
-
-### Deno 版（`deno/` ディレクトリ）
-
-```bash
-cd deno
-
 # 記事データのみ取得・表示（Markdown テーブル）
 deno task hn-top10
 
@@ -40,47 +25,40 @@ deno task summary
 deno task test
 ```
 
-#### Deno 版のアーキテクチャ
-
-```
-deno/
-├── main.ts          # エントリポイント（hn-top10.sh 相当）
-├── summary.ts       # エントリポイント（hn-summary.sh 相当）
-├── hn_client.ts     # HN API fetch（リトライ・レートリミット付き）
-├── ranking.ts       # 純粋関数: selectTopN, filterByMinComments, calculateRatio, rankStories
-├── formatters.ts    # 出力レンダラー: Markdown / HTML / JSON
-├── cli.ts           # CLI 引数パーサー
-├── schemas.ts       # Zod スキーマ（HN API レスポンス検証）
-├── types.ts         # TypeScript インタフェース
-├── deps.ts          # サードパーティ依存の集約 re-export
-└── tests/           # deno test によるユニットテスト（41 テスト）
-```
-
 ## 依存コマンド
 
-- `curl` — HN API および Claude API への HTTP リクエスト
-- `jq` — JSON のパース・変換・フィルタリング
-- `claude` — Claude Code CLI（`hn-summary.sh` のみ）
+- `deno` — fetch API 内蔵のため `curl`/`jq` 不要
+- `claude` — Claude Code CLI（`summary.ts` のみ）
 
 ## アーキテクチャ
 
-### スクリプトの関係
+### ファイル構成
 
 ```
-hn-summary.sh
-  └─ hn-top10.sh を呼び出し（サブプロセス）
-       └─ HN Firebase API からデータ取得・整形
-  └─ claude -p に結果を渡してサマリー生成
+.
+├── main.ts          # エントリポイント（hn-top10.sh 相当）
+├── summary.ts       # エントリポイント（hn-summary.sh 相当）
+├── hn_client.ts     # HN API fetch（リトライ・sleep 1 レートリミット付き）
+├── ranking.ts       # 純粋関数: selectTopN, filterByMinComments, calculateRatio, rankStories
+├── formatters.ts    # 出力レンダラー: Markdown / HTML / JSON
+├── cli.ts           # CLI 引数パーサー（--format, --min-comments, --help）
+├── schemas.ts       # Zod スキーマ（HN API レスポンス検証）
+├── types.ts         # TypeScript インタフェース
+├── deps.ts          # サードパーティ依存の集約 re-export
+├── deno.json        # tasks / imports map
+├── tests/           # deno test によるユニットテスト（41 テスト）
+└── shell/           # アーカイブ: 旧シェルスクリプト版（curl + jq）
 ```
 
-### データフロー（hn-top10.sh）
+### データフロー
 
-1. `topstories.json` から上位 30 件の ID を取得
-2. 各 ID に対して `item/<id>.json` を順次取得
-3. `title / url / score / descendants` を jq で JSON 配列に集約
-4. スコア降順で上位 5 件に絞り込み
-5. `ratio = score / descendants`（コメント 0 の場合は score そのまま）を計算
-6. ratio 降順でソートし Markdown テーブルとして出力
+```
+main.ts
+  └─ cli.ts        — 引数パース
+  └─ hn_client.ts  — HN API fetch（topstories → 各 item を逐次取得）
+  └─ ranking.ts    — selectTopN → filterByMinComments → rankStories
+  └─ formatters.ts — Markdown / HTML / JSON 出力
+```
 
 ### HN API エンドポイント（ベース URL: `https://hacker-news.firebaseio.com/v0`）
 
@@ -89,12 +67,13 @@ hn-summary.sh
 | `/topstories.json` | トップ記事 ID リスト（最大 500 件） |
 | `/item/<id>.json` | 記事詳細（title, url, score, descendants, by など） |
 
-## 定数・調整ポイント
+### 定数・調整ポイント
 
-| 変数 | ファイル | 意味 |
+| 定数 | ファイル | 意味 |
 |---|---|---|
-| `FETCH_N` | hn-top10.sh | API から取得する記事数（デフォルト 30） |
-| `TOP_N` | hn-top10.sh | スコア上位から選ぶ件数（デフォルト 5） |
+| `FETCH_N` | `cli.ts` (デフォルト値) | API から取得する記事数（デフォルト 30） |
+| `TOP_N` | `cli.ts` (デフォルト値) | スコア上位から選ぶ件数（デフォルト 5） |
+| `RATE_LIMIT_MS` | `hn_client.ts` | リクエスト間隔（デフォルト 1000ms） |
 
 ## セッション振り返り（2026-04-02）
 
