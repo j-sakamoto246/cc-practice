@@ -22,6 +22,42 @@ function broadcast(payload: unknown): void {
   }
 }
 
+// ---- Claude CLI による日本語タイトル翻訳 ----
+
+async function translateTitles(titles: string[]): Promise<string[]> {
+  const prompt =
+    `以下の英語ニュースタイトルを自然な日本語に翻訳してください。
+固有名詞・技術用語はそのまま残してください。
+結果は JSON 配列（文字列のみ）で、入力と同じ順序・同じ件数で返してください。
+他の文章は一切出力しないでください。
+
+${JSON.stringify(titles)}`;
+
+  const cmd = new Deno.Command("claude", {
+    args: ["-p", "-"],
+    stdin: "piped",
+    stdout: "piped",
+    stderr: "inherit",
+  });
+
+  const process = cmd.spawn();
+  const writer = process.stdin.getWriter();
+  await writer.write(new TextEncoder().encode(prompt));
+  await writer.close();
+
+  const { stdout } = await process.output();
+  const raw = new TextDecoder().decode(stdout).trim();
+
+  // JSON 配列部分を抽出してパース
+  const match = raw.match(/\[[\s\S]*\]/);
+  if (!match) throw new Error(`翻訳レスポンスのパースに失敗: ${raw.slice(0, 100)}`);
+  const translated: unknown = JSON.parse(match[0]);
+  if (!Array.isArray(translated) || translated.length !== titles.length) {
+    throw new Error(`翻訳件数が不一致: expected ${titles.length}, got ${Array.isArray(translated) ? translated.length : "non-array"}`);
+  }
+  return translated.map(String);
+}
+
 // ---- ポーリング ----
 
 async function poll(): Promise<void> {
@@ -29,13 +65,24 @@ async function poll(): Promise<void> {
   try {
     const ranked = await fetchMultiSource(SOURCES, FETCH_N, TOP_N);
 
+    // claude -p で日本語タイトルを付与
+    let storiesWithJa: (typeof ranked[number] & { titleJa: string })[];
+    try {
+      const jatitles = await translateTitles(ranked.map((s) => s.title));
+      storiesWithJa = ranked.map((s, i) => ({ ...s, titleJa: jatitles[i] }));
+      console.log(`[${new Date().toISOString()}] Translation done`);
+    } catch (err) {
+      console.error("Translation failed, falling back to original titles:", err);
+      storiesWithJa = ranked.map((s) => ({ ...s, titleJa: s.title }));
+    }
+
     const currentUrls = new Set(ranked.map((s) => s.url));
     const newUrls = [...currentUrls].filter((u) => !previousUrls.has(u));
 
-    cachedStories = ranked;
+    cachedStories = storiesWithJa as typeof cachedStories;
     previousUrls = currentUrls;
 
-    broadcast({ type: "update", stories: ranked, newUrls, timestamp: new Date().toISOString() });
+    broadcast({ type: "update", stories: storiesWithJa, newUrls, timestamp: new Date().toISOString() });
     console.log(
       `[${new Date().toISOString()}] Broadcasted ${ranked.length} stories (${newUrls.length} new)`,
     );
@@ -121,14 +168,15 @@ const HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <h1>ニュース リアルタイムフィード（HN / Lobsters / Dev.to / Reddit）</h1>
+  <h1>ニュース リアルタイムフィード（HN / Lobsters / Dev.to / Reddit）— Claude 日本語訳付き</h1>
   <div id="status" class="disconnected">接続中...</div>
   <table>
     <thead>
       <tr>
         <th class="rank">#</th>
         <th class="source">ソース</th>
-        <th>タイトル</th>
+        <th>タイトル（日本語）</th>
+        <th>原題</th>
         <th class="score">スコア</th>
         <th class="normalized">正規化</th>
         <th class="comments">コメント</th>
@@ -173,10 +221,12 @@ const HTML = `<!DOCTYPE html>
         const color = SOURCE_COLORS[s.source] || '#888';
         const srcBadge = \`<span class="src-badge" style="background:\${color}">\${s.source}</span>\`;
         const newBadge = newSet.has(s.url) ? '<span class="new-badge">NEW</span>' : '';
+        const ja = s.titleJa || s.title;
         return \`<tr>
           <td class="rank">\${s.rank}</td>
           <td class="source">\${srcBadge}</td>
-          <td><a href="\${s.url}" target="_blank" rel="noopener">\${escHtml(s.title)}</a>\${newBadge}</td>
+          <td><a href="\${s.url}" target="_blank" rel="noopener">\${escHtml(ja)}</a>\${newBadge}</td>
+          <td style="font-size:0.8rem;color:#999">\${escHtml(s.title)}</td>
           <td class="score">\${s.score}</td>
           <td class="normalized">\${s.normalizedScore}</td>
           <td class="comments">\${s.comments}</td>

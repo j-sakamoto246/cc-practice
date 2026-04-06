@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "server": "deno run --allow-net server.ts",
+    "server": "deno run --allow-net --allow-run server.ts",
     "hn-top10": "deno run --allow-net main.ts",
     "summary": "deno run --allow-net --allow-run summary.ts",
     "test": "deno test --allow-read tests/",
