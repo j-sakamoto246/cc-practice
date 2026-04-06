@@ -41,8 +41,9 @@ curl --version && jq --version
 ./news-summary.sh --sources "hn,reddit,lobsters,devto" --top 15 --format json
 
 # 全ソース統合ランキング + Claudeによる日本語サマリー生成（よく使う）
-./news-summary.sh --sources "hn,reddit,lobsters,devto" | \
-  claude -p "以下のニュース一覧の各記事を1〜2文の日本語でサマリーしてください。Markdownの箇条書き形式で出力してください。"
+# ※ HN取得に時間がかかるため、変数に受けてから渡す
+news=$(./news-summary.sh --sources "hn,reddit,lobsters,devto") && \
+  echo "$news" | claude -p "以下のニュース一覧の各記事を1〜2文の日本語でサマリーしてください。Markdownの箇条書き形式で出力してください。"
 ```
 
 ### テスト
