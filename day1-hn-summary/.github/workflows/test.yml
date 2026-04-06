@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ShellCheck のバイナリをキャッシュ
+      - name: Cache ShellCheck binary
+        id: cache-shellcheck
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/shellcheck
+          key: shellcheck-${{ runner.os }}-v0.10.0
+
+      - name: Install ShellCheck
+        if: steps.cache-shellcheck.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.local/bin
+          curl -sSL https://github.com/koalaman/shellcheck/releases/download/v0.10.0/shellcheck-v0.10.0.linux.x86_64.tar.xz \
+            | tar -xJ --strip-components=1 -C ~/.local/bin shellcheck-v0.10.0/shellcheck
+          chmod +x ~/.local/bin/shellcheck
+
+      - name: Add local bin to PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run ShellCheck
+        run: shellcheck hn-top10.sh hn-summary.sh test_scripts.sh
+
+      - name: Install dependencies (curl, jq)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl jq
+
+      - name: Run tests
+        run: bash test_scripts.sh
+
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -sSf -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"text\": \":x: CI failed on *${{ github.repository }}*\",
+              \"attachments\": [{
+                \"color\": \"danger\",
+                \"fields\": [
+                  {\"title\": \"Branch\",    \"value\": \"${{ github.ref_name }}\",   \"short\": true},
+                  {\"title\": \"Commit\",    \"value\": \"${{ github.sha }}\",        \"short\": true},
+                  {\"title\": \"Run URL\",   \"value\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\", \"short\": false}
+                ]
+              }]
+            }"
