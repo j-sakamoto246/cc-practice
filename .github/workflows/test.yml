@@ -36,18 +36,15 @@ jobs:
         run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Run ShellCheck
-        run: shellcheck hn-top10.sh hn-summary.sh test_scripts.sh news-summary.sh test_adapters.sh lib/*.sh
+        run: shellcheck shell/hn-top10.sh shell/hn-summary.sh shell/test_scripts.sh shell/news-summary.sh shell/test_adapters.sh shell/lib/*.sh
 
-      - name: Install dependencies (curl, jq)
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq curl jq
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
 
-      - name: Run adapter tests (mock data, no API)
-        run: bash test_adapters.sh
-
-      - name: Run integration tests (API access)
-        run: bash test_scripts.sh
+      - name: Run Deno unit tests
+        run: deno task test
 
       - name: Notify Slack on failure
         if: failure()
