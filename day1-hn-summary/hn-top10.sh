@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 usage() {
   cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
@@ -13,6 +15,9 @@ Options:
   --categorize         記事をカテゴリ別にグループ化して出力（claude CLI 使用）
   --min-comments N     コメント数が N 件以上の記事のみを対象にする（デフォルト: 0）
   --format FORMAT      出力形式を指定する: markdown / html / json（デフォルト: markdown）
+  --diff               前回の実行との差分を表示（新着・消滅記事）
+  --trend              過去 7 日間のカテゴリ別トレンドを表示
+  --no-history         DB への保存をスキップ（ドライラン用）
 
 設定値:
   FETCH_N   API から取得する記事数（デフォルト: 30）
@@ -26,6 +31,9 @@ EOF
 CATEGORIZE=false
 MIN_COMMENTS=0
 FORMAT="markdown"
+SHOW_DIFF=false
+SHOW_TREND=false
+SAVE_HISTORY=true
 
 while [[ $# -gt 0 ]]; do
   case "${1:-}" in
@@ -47,6 +55,9 @@ while [[ $# -gt 0 ]]; do
       FORMAT="$2"
       shift
       ;;
+    --diff)        SHOW_DIFF=true ;;
+    --trend)       SHOW_TREND=true ;;
+    --no-history)  SAVE_HISTORY=false ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
   esac
   shift
@@ -150,6 +161,20 @@ else
   final=$(echo "$prepared" | jq 'sort_by(-.ratio) | to_entries[] | .value' | jq -s '.')
 fi
 
+# ── 履歴保存・差分検出 ────────────────────────────────
+# shellcheck source=lib/history.sh
+source "${SCRIPT_DIR}/lib/history.sh"
+history_init
+
+if $SHOW_DIFF; then
+  history_diff "hn-top10" "hn" "$final"
+fi
+
+if $SAVE_HISTORY; then
+  history_save_run "hn-top10" "hn" "$final" || \
+    echo "Warning: 履歴の保存に失敗しました。" >&2
+fi
+
 # ── 出力 ──────────────────────────────────────────────
 
 case "$FORMAT" in
@@ -209,3 +234,7 @@ case "$FORMAT" in
     ;;
 
 esac
+
+if $SHOW_TREND; then
+  history_trend "hn-top10" "hn"
+fi

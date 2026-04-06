@@ -16,6 +16,9 @@ Options:
                        指定可能: hn, reddit, lobsters, devto
   --top N              表示件数（デフォルト: 10）
   --format FORMAT      出力形式: markdown / json（デフォルト: markdown）
+  --diff               前回の実行との差分を表示（新着・消滅記事）
+  --trend              過去 7 日間のソース別トレンドを表示
+  --no-history         DB への保存をスキップ（ドライラン用）
 
 依存コマンド: curl, jq
 EOF
@@ -24,6 +27,9 @@ EOF
 SOURCES="hn"
 TOP_N=10
 FORMAT="markdown"
+SHOW_DIFF=false
+SHOW_TREND=false
+SAVE_HISTORY=true
 
 while [[ $# -gt 0 ]]; do
   case "${1:-}" in
@@ -52,6 +58,9 @@ while [[ $# -gt 0 ]]; do
       FORMAT="$2"
       shift
       ;;
+    --diff)        SHOW_DIFF=true ;;
+    --trend)       SHOW_TREND=true ;;
+    --no-history)  SAVE_HISTORY=false ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
   esac
   shift
@@ -98,6 +107,20 @@ fi
 # 統合ランキング
 ranked=$(echo "$all_results" | merge_and_rank "$TOP_N")
 
+# ── 履歴保存・差分検出 ────────────────────────────────
+# shellcheck source=lib/history.sh
+source "${SCRIPT_DIR}/lib/history.sh"
+history_init
+
+if $SHOW_DIFF; then
+  history_diff "news-summary" "$SOURCES" "$ranked"
+fi
+
+if $SAVE_HISTORY; then
+  history_save_run "news-summary" "$SOURCES" "$ranked" || \
+    echo "Warning: 履歴の保存に失敗しました。" >&2
+fi
+
 DATE=$(date '+%Y-%m-%d')
 
 case "$FORMAT" in
@@ -127,3 +150,7 @@ case "$FORMAT" in
     ;;
 
 esac
+
+if $SHOW_TREND; then
+  history_trend "news-summary" "$SOURCES"
+fi
