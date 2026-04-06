@@ -3,11 +3,16 @@
 [![CI](https://github.com/j-sakamoto/cc-practice/actions/workflows/test.yml/badge.svg)](https://github.com/j-sakamoto/cc-practice/actions/workflows/test.yml)
 
 Hacker News のトップ記事を取得し、スコア/コメント比で並べ替えた Markdown レポートを生成します。
+HN / Lobsters / Dev.to / Reddit の複数ソースに対応したリアルタイム WebSocket サーバーも提供します。
 Deno（TypeScript）版がメイン実装。シェルスクリプト版は `shell/` にアーカイブ。
 
 ## 使い方
 
 ```bash
+# リアルタイムフィードサーバー（HN / Lobsters / Dev.to / Reddit + Claude 日本語訳）
+deno task server
+# → http://localhost:8080 をブラウザで開く
+
 # 記事データのみ取得・表示（Markdown テーブル）
 deno task hn-top10
 
@@ -23,7 +28,7 @@ deno task summary
 deno task test
 ```
 
-依存: `deno`（fetch API 内蔵のため `curl`/`jq` 不要）、`claude`（`summary.ts` のみ）
+依存: `deno`（fetch API 内蔵のため `curl`/`jq` 不要）、`claude`（`server.ts` / `summary.ts` のみ）
 
 ## アーカイブ（シェルスクリプト版）
 
