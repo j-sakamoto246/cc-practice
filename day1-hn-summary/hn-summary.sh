@@ -2,6 +2,25 @@
 
 set -euo pipefail
 
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Hacker News のトップ記事を取得し、Claude Code による日本語サマリーを含む
+Markdown レポートを出力します。
+
+Options:
+  --help    このヘルプを表示して終了
+
+依存コマンド: curl, jq, claude（Claude Code CLI）
+EOF
+}
+
+if [[ "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATE=$(date '+%Y-%m-%d')
 
