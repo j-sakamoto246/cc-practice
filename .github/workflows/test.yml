@@ -9,6 +9,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: day1-hn-summary
 
     steps:
       - uses: actions/checkout@v4
