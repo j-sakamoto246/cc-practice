@@ -1,5 +1,6 @@
 {
   "tasks": {
+    "server": "deno run --allow-net server.ts",
     "hn-top10": "deno run --allow-net main.ts",
     "summary": "deno run --allow-net --allow-run summary.ts",
     "test": "deno test --allow-read tests/",
@@ -8,6 +9,7 @@
     "fmt": "deno fmt"
   },
   "imports": {
+    "hono": "jsr:@hono/hono@^4",
     "zod": "https://deno.land/x/zod@v3.23.8/mod.ts",
     "std/assert": "https://deno.land/std@0.224.0/assert/mod.ts",
     "std/testing/mock": "https://deno.land/std@0.224.0/testing/mock.ts"
