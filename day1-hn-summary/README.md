@@ -2,9 +2,11 @@
 
 [![CI](https://github.com/j-sakamoto/cc-practice/actions/workflows/test.yml/badge.svg)](https://github.com/j-sakamoto/cc-practice/actions/workflows/test.yml)
 
-Hacker News のトップ記事を取得し、スコア/コメント比で並べ替えた Markdown レポートを生成するシェルスクリプト群。
+Hacker News のトップ記事を取得し、スコア/コメント比で並べ替えた Markdown レポートを生成するスクリプト群。シェルスクリプト版と Deno（TypeScript）版の両方を収録。
 
 ## 使い方
+
+### シェルスクリプト版（`main` ブランチ）
 
 ```bash
 # 記事データのみ取得・表示（Markdown テーブル）
@@ -14,11 +16,27 @@ Hacker News のトップ記事を取得し、スコア/コメント比で並べ�
 ./hn-summary.sh
 ```
 
-## 依存コマンド
+依存: `curl`, `jq`, `claude`（`hn-summary.sh` のみ）
 
-- `curl` — HN API への HTTP リクエスト
-- `jq` — JSON パース
-- `claude` — Claude Code CLI（`hn-summary.sh` のみ）
+### Deno 版（`feature/deno-rewrite` ブランチ）
+
+```bash
+# 記事データのみ取得・表示（Markdown テーブル）
+cd deno && deno task hn-top10
+
+# 出力形式を指定
+deno run --allow-net main.ts --format json
+deno run --allow-net main.ts --format html
+deno run --allow-net main.ts --min-comments 10
+
+# 記事取得 + Claude Code による日本語サマリー生成
+deno task summary
+
+# ユニットテスト（ネットワーク不要）
+deno task test
+```
+
+依存: `deno`（fetch API 内蔵のため `curl`/`jq` 不要）、`claude`（`summary.ts` のみ）
 
 ## CI
 

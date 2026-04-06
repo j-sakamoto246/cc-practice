@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 概要
 
-Hacker News のトップ記事を取得し、スコア/コメント比で並べ替えた Markdown レポートを生成するシェルスクリプト群。
+Hacker News のトップ記事を取得し、スコア/コメント比で並べ替えた Markdown レポートを生成するスクリプト群。シェルスクリプト版（`main`）と Deno/TypeScript 版（`feature/deno-rewrite`）がある。
 
 ## 実行方法
+
+### シェルスクリプト版
 
 ```bash
 # 記事データのみ取得・表示（Markdown テーブル）
@@ -17,6 +19,42 @@ Hacker News のトップ記事を取得し、スコア/コメント比で並べ�
 ```
 
 `hn-summary.sh` の実行には `claude` CLI（Claude Code）がインストールされ、認証済みである必要がある。
+
+### Deno 版（`deno/` ディレクトリ）
+
+```bash
+cd deno
+
+# 記事データのみ取得・表示（Markdown テーブル）
+deno task hn-top10
+
+# 出力形式の指定
+deno run --allow-net main.ts --format json
+deno run --allow-net main.ts --format html
+deno run --allow-net main.ts --min-comments 10
+
+# 日本語サマリー生成（claude CLI が必要）
+deno task summary
+
+# ユニットテスト（ネットワーク不要）
+deno task test
+```
+
+#### Deno 版のアーキテクチャ
+
+```
+deno/
+├── main.ts          # エントリポイント（hn-top10.sh 相当）
+├── summary.ts       # エントリポイント（hn-summary.sh 相当）
+├── hn_client.ts     # HN API fetch（リトライ・レートリミット付き）
+├── ranking.ts       # 純粋関数: selectTopN, filterByMinComments, calculateRatio, rankStories
+├── formatters.ts    # 出力レンダラー: Markdown / HTML / JSON
+├── cli.ts           # CLI 引数パーサー
+├── schemas.ts       # Zod スキーマ（HN API レスポンス検証）
+├── types.ts         # TypeScript インタフェース
+├── deps.ts          # サードパーティ依存の集約 re-export
+└── tests/           # deno test によるユニットテスト（41 テスト）
+```
 
 ## 依存コマンド
 
