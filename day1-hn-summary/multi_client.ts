@@ -40,7 +40,7 @@ async function fetchLobsters(fetchN: number): Promise<SourceStory[]> {
     .slice(0, fetchN)
     .map((item) => ({
       title: String(item["title"] ?? "No title"),
-      url: String((item["url"] as string | undefined)?.trim() || item["short_id_url"] ?? ""),
+      url: String((item["url"] as string | undefined)?.trim() || (item["short_id_url"] ?? "")),
       score: Number(item["score"] ?? 0),
       comments: Number(item["comment_count"] ?? 0),
       source: "lobsters" as const,
