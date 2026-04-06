@@ -36,7 +36,8 @@ jobs:
         run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Run ShellCheck
-        run: shellcheck shell/hn-top10.sh shell/hn-summary.sh shell/test_scripts.sh shell/news-summary.sh shell/test_adapters.sh shell/lib/*.sh
+        working-directory: day1-hn-summary/shell
+        run: shellcheck hn-top10.sh hn-summary.sh test_scripts.sh news-summary.sh test_adapters.sh lib/*.sh
 
       - name: Install Deno
         uses: denoland/setup-deno@v2
