@@ -2,65 +2,54 @@
 
 ## day1-hn-summary
 
-Hacker News / Reddit / Lobsters / Dev.to からニュースを集約するスクリプト群。
+Hacker News のトップ記事を取得し、スコア/コメント比で並べ替えた Markdown レポートを生成する。
+**Deno（TypeScript）版がメイン。** 旧シェルスクリプト版は `shell/` にアーカイブ。
 
 ### セットアップ
 
 ```bash
 cd day1-hn-summary
 
-# 依存コマンドの確認
-curl --version && jq --version
+# Deno インストール（未インストールの場合）
+curl -fsSL https://deno.land/install.sh | sh
 ```
 
 ### コマンド集
 
 ```bash
 # HN トップ記事をMarkdownテーブルで表示
-./hn-top10.sh
+deno task hn-top10
 
 # フォーマット指定（markdown / html / json）
-./hn-top10.sh --format json
+deno run --allow-net main.ts --format json
 
 # コメント数フィルタ（コメント10件以上のみ）
-./hn-top10.sh --min-comments 10
-
-# Claude でカテゴリ分類して表示（claude CLI 必須）
-./hn-top10.sh --categorize
+deno run --allow-net main.ts --min-comments 10
 
 # HN記事 + Claudeによる日本語サマリー生成（claude CLI 必須）
-./hn-summary.sh
-
-# 複数ソースの統合ランキング（デフォルト: HNのみ）
-./news-summary.sh
-
-# ソースを指定（hn / reddit / lobsters / devto）
-./news-summary.sh --sources "hn,reddit,lobsters"
-
-# 全ソース統合、上位15件をJSON出力
-./news-summary.sh --sources "hn,reddit,lobsters,devto" --top 15 --format json
-
-# 全ソース統合ランキング + Claudeによる日本語サマリー生成（よく使う）
-# ※ HN取得に時間がかかるため、変数に受けてから渡す
-news=$(./news-summary.sh --sources "hn,reddit,lobsters,devto") && \
-  echo "$news" | claude -p "以下のニュース一覧の各記事を1〜2文の日本語でサマリーしてください。Markdownの箇条書き形式で出力してください。"
+deno task summary
 ```
 
 ### テスト
 
 ```bash
-# アダプタテスト（モックデータ使用、API アクセスなし・高速）
-bash test_adapters.sh
-
-# 統合テスト（HN API アクセスあり・約30秒）
-bash test_scripts.sh
+# ユニットテスト（ネットワーク不要・高速）
+deno task test
 ```
 
 ### 依存コマンド
 
 | コマンド | 用途 | 必須スクリプト |
 |---|---|---|
-| `curl` | API リクエスト | 全スクリプト |
-| `jq` | JSON パース | 全スクリプト |
-| `claude` | 日本語サマリー・カテゴリ分類 | `hn-summary.sh`, `hn-top10.sh --categorize` |
+| `deno` | 実行・テスト（fetch 内蔵のため curl/jq 不要） | 全スクリプト |
+| `claude` | 日本語サマリー生成 | `summary.ts` のみ |
 
+### アーカイブ（旧シェルスクリプト版）
+
+`shell/` ディレクトリに旧バージョンを保存。依存: `curl`, `jq`
+
+```bash
+shell/hn-top10.sh
+shell/hn-summary.sh
+shell/news-summary.sh
+```
