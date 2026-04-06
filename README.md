@@ -20,7 +20,7 @@ curl -fsSL https://deno.land/install.sh | sh
 ```bash
 # リアルタイムフィードサーバー（HN / Lobsters / Dev.to / Reddit + Claude 日本語訳）
 deno task server
-# → http://localhost:8080 をブラウザで開く
+# → http://localhost:8080 をブラウザで開く（停止: Ctrl + C）
 
 # HN トップ記事を Markdown テーブルで表示
 deno task hn-top10
