@@ -11,12 +11,20 @@ fail() { echo "  FAIL: $1"; FAIL=$((FAIL + 1)); }
 
 assert_contains() {
   local desc="$1" needle="$2" haystack="$3"
-  echo "$haystack" | grep -q "$needle" && pass "$desc" || fail "$desc（'${needle}' が見つからない）"
+  if echo "$haystack" | grep -q "$needle"; then
+    pass "$desc"
+  else
+    fail "$desc（'${needle}' が見つからない）"
+  fi
 }
 
 assert_eq() {
   local desc="$1" expected="$2" actual="$3"
-  [[ "$expected" == "$actual" ]] && pass "$desc" || fail "$desc（期待: ${expected}, 実際: ${actual}）"
+  if [[ "$expected" == "$actual" ]]; then
+    pass "$desc"
+  else
+    fail "$desc（期待: ${expected}, 実際: ${actual}）"
+  fi
 }
 
 # ─────────────────────────────────────────────
@@ -29,8 +37,11 @@ assert_contains "--help に TOP_N が含まれる"   "TOP_N"    "$help_out"
 assert_contains "--help に依存コマンドが含まれる" "curl"  "$help_out"
 
 # --help で終了コード 0
-"${SCRIPT_DIR}/hn-top10.sh" --help > /dev/null 2>&1 \
-  && pass "--help の終了コードが 0" || fail "--help の終了コードが 0"
+if "${SCRIPT_DIR}/hn-top10.sh" --help > /dev/null 2>&1; then
+  pass "--help の終了コードが 0"
+else
+  fail "--help の終了コードが 0"
+fi
 
 # ─────────────────────────────────────────────
 echo ""
@@ -57,33 +68,38 @@ while IFS= read -r line; do
     [[ "$cols" -ne 6 ]] && invalid_rows=$((invalid_rows + 1))
   fi
 done <<< "$output"
-[[ "$invalid_rows" -eq 0 ]] \
-  && pass "全データ行のカラム数が正しい（6列）" \
-  || fail "カラム数が不正な行が ${invalid_rows} 件"
+if [[ "$invalid_rows" -eq 0 ]]; then
+  pass "全データ行のカラム数が正しい（6列）"
+else
+  fail "カラム数が不正な行が ${invalid_rows} 件"
+fi
 
 # Score/Comment 比がすべて数値
 invalid_ratios=0
 while IFS= read -r ratio; do
-  echo "$ratio" | grep -qE '^[0-9]+(\.[0-9]+)?$' || invalid_ratios=$((invalid_ratios + 1))
+  if ! echo "$ratio" | grep -qE '^[0-9]+(\.[0-9]+)?$'; then
+    invalid_ratios=$((invalid_ratios + 1))
+  fi
 done <<< "$(echo "$output" | grep "^| [0-9]" | awk -F'|' '{print $6}' | tr -d ' ')"
-[[ "$invalid_ratios" -eq 0 ]] \
-  && pass "Score/Comment 比がすべて数値" \
-  || fail "Score/Comment 比に非数値が ${invalid_ratios} 件"
+if [[ "$invalid_ratios" -eq 0 ]]; then
+  pass "Score/Comment 比がすべて数値"
+else
+  fail "Score/Comment 比に非数値が ${invalid_ratios} 件"
+fi
 
-# Score が降順（ratio ではなく score でソートされた上位5件の中で ratio ソート済み）
+# Score がすべて正の整数かを確認
 scores=$(echo "$output" | grep "^| [0-9]" | awk -F'|' '{print $4}' | tr -d ' ')
-max_score=999999
-valid_order=true
-while IFS= read -r score; do
-  [[ "$score" -le "$max_score" ]] 2>/dev/null || valid_order=false
-  max_score=$score
-done <<< "$scores"
-# Score は ratio ソート後なので完全降順でなくてもよい — 全件が正の整数かを確認
 all_positive=true
 while IFS= read -r score; do
-  echo "$score" | grep -qE '^[0-9]+$' || all_positive=false
+  if ! echo "$score" | grep -qE '^[0-9]+$'; then
+    all_positive=false
+  fi
 done <<< "$scores"
-$all_positive && pass "Score がすべて正の整数" || fail "Score がすべて正の整数"
+if $all_positive; then
+  pass "Score がすべて正の整数"
+else
+  fail "Score がすべて正の整数"
+fi
 
 # ─────────────────────────────────────────────
 echo ""
@@ -93,8 +109,11 @@ help_out=$("${SCRIPT_DIR}/hn-summary.sh" --help 2>&1)
 assert_contains "--help に Usage が含まれる"          "Usage:"  "$help_out"
 assert_contains "--help に claude への依存が明記される" "claude" "$help_out"
 
-"${SCRIPT_DIR}/hn-summary.sh" --help > /dev/null 2>&1 \
-  && pass "--help の終了コードが 0" || fail "--help の終了コードが 0"
+if "${SCRIPT_DIR}/hn-summary.sh" --help > /dev/null 2>&1; then
+  pass "--help の終了コードが 0"
+else
+  fail "--help の終了コードが 0"
+fi
 
 # ─────────────────────────────────────────────
 echo ""
