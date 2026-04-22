@@ -120,6 +120,20 @@ export async function deleteProduct(id: string): Promise<void> {
   logger.info(`商品を削除しました: ${existing.name} (${id})`);
 }
 
+export async function getProductBySku(sku: string): Promise<Product | null> {
+  const client = getClient();
+
+  const result = await client.execute({
+    sql: "SELECT * FROM products WHERE sku = ?",
+    args: [sku],
+  });
+
+  const row = result.rows[0];
+  if (!row) return null;
+
+  return rowToProduct(row);
+}
+
 async function getProductById(id: string): Promise<Product | null> {
   const client = getClient();
 

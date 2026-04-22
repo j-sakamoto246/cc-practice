@@ -131,6 +131,37 @@ export async function stockOut(input: StockOutInput): Promise<StockMovement> {
   return rowToMovement(result.rows[0]!);
 }
 
+export async function getWarehouseByName(name: string) {
+  const client = getClient();
+  const result = await client.execute({
+    sql: "SELECT * FROM warehouses WHERE name = ?",
+    args: [name],
+  });
+  const row = result.rows[0];
+  if (!row) return null;
+  return { id: row["id"] as string, name: row["name"] as string, location: row["location"] as string };
+}
+
+export async function getAllStock() {
+  const client = getClient();
+  const result = await client.execute(
+    `SELECT i.product_id, p.sku, p.name as product_name, i.warehouse_id, w.name as warehouse_name, i.quantity
+     FROM inventory i
+     JOIN products p ON p.id = i.product_id
+     JOIN warehouses w ON w.id = i.warehouse_id
+     WHERE i.quantity > 0
+     ORDER BY p.sku, w.name`,
+  );
+  return result.rows.map((row) => ({
+    product_id: row["product_id"] as string,
+    sku: row["sku"] as string,
+    product_name: row["product_name"] as string,
+    warehouse_id: row["warehouse_id"] as string,
+    warehouse_name: row["warehouse_name"] as string,
+    quantity: row["quantity"] as number,
+  }));
+}
+
 export async function getStockStatus(
   productId: string,
   warehouseId: string,

@@ -271,8 +271,6 @@ describe("product module", () => {
 
     it("更新後に updated_at が変化する", async () => {
       const product = await addProduct(sampleInput);
-      const originalUpdatedAt = product.updated_at;
-
       // SQLite の datetime('now') は秒精度なので、同一秒だと同じ値になる可能性がある
       // DB 側で更新されていることを確認するため、直接 SQL で確認
       const updated = await updateProduct(product.id, { name: "更新後" });

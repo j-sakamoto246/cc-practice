@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { initDatabase, closeDatabase } from "./db/client.js";
+import { registerProductCommands } from "./cli/product.cmd.js";
+import { registerStockCommands } from "./cli/stock.cmd.js";
+import { registerOrderCommands } from "./cli/order.cmd.js";
+import { registerCampaignCommands } from "./cli/campaign.cmd.js";
+import { registerAccountingCommands } from "./cli/accounting.cmd.js";
 
 const program = new Command();
 
@@ -12,10 +17,14 @@ program
     await initDatabase();
   });
 
-// TODO: register commands here
+registerProductCommands(program);
+registerStockCommands(program);
+registerOrderCommands(program);
+registerCampaignCommands(program);
+registerAccountingCommands(program);
 
-program.parseAsync().catch((err) => {
-  console.error(err);
+program.parseAsync().catch((err: Error) => {
+  console.error(`エラー: ${err.message}`);
   process.exitCode = 1;
 }).finally(() => {
   closeDatabase();
