@@ -11,7 +11,7 @@ const program = new Command();
 
 program
   .name("inventory")
-  .version("1.0.0")
+  .version("1.1.0")
   .description("CLI-based inventory management system")
   .hook("preAction", async () => {
     await initDatabase();
