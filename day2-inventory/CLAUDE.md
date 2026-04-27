@@ -45,6 +45,8 @@ Every inventory change must atomically (via `client.batch()`):
 
 12 tables total. All use TEXT primary keys (`crypto.randomUUID()`). Soft delete via `is_active` flag on master tables. Dates stored as ISO 8601 TEXT. `updated_at` must be set explicitly in repository code (no DB trigger).
 
+ER 図・データフロー・マイグレーション運用フローは [docs/database.md](./docs/database.md) を参照。
+
 ### Testing
 
 - `tests/setup.ts` runs `beforeEach` → fresh in-memory DB per test

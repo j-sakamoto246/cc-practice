@@ -3,6 +3,8 @@
 `npm run build && npm link` 後は `inventory` コマンドとして直接実行可能。
 開発中は `npm run dev -- <コマンド>` でも実行可能（ビルド不要）。
 
+> DB スキーマ・データフローの詳細は [docs/database.md](./docs/database.md) を参照。
+
 > **注意**: `src/` を編集したら `npm run build` してから `inventory` を使うこと。
 
 ## 商品管理 (product)
