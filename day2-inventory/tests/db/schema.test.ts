@@ -16,19 +16,29 @@ describe("schema", () => {
       "products",
       "schema_migrations",
       "shipments",
+      "stock_lots",
       "stock_movements",
       "transactions",
       "warehouses",
     ]);
   });
 
-  it("records 001_init in schema_migrations", async () => {
+  it("records all migrations in schema_migrations", async () => {
     const client = getClient();
     const result = await client.execute(
       "SELECT version, name FROM schema_migrations ORDER BY version",
     );
     expect(result.rows.map((r) => ({ version: r["version"], name: r["name"] }))).toEqual([
       { version: "001", name: "init" },
+      { version: "002", name: "add_lead_time_to_products" },
+      { version: "003", name: "add_stock_lots" },
     ]);
+  });
+
+  it("stock_movements has lot_id column referencing stock_lots", async () => {
+    const client = getClient();
+    const info = await client.execute("PRAGMA table_info(stock_movements)");
+    const columns = info.rows.map((r) => r["name"] as string);
+    expect(columns).toContain("lot_id");
   });
 });

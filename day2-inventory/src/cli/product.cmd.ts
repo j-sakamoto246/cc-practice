@@ -5,6 +5,7 @@ import {
   updateProduct,
   deleteProduct,
   getProductBySku,
+  setLeadTime,
 } from "../modules/product.js";
 import { formatTable } from "../utils/formatter.js";
 
@@ -72,6 +73,16 @@ export function registerProductCommands(parent: Command) {
         cost: opts.cost,
       });
       console.log(`商品を更新しました: ${updated.name} (SKU: ${updated.sku})`);
+    });
+
+  cmd
+    .command("set-lead-time")
+    .description("リードタイム（入荷までの日数）を設定")
+    .requiredOption("--sku <sku>", "対象SKU")
+    .requiredOption("--days <days>", "リードタイム日数", (v) => parseInt(v, 10))
+    .action(async (opts: { sku: string; days: number }) => {
+      const updated = await setLeadTime(opts.sku, opts.days);
+      console.log(`リードタイムを更新しました: ${updated.sku} → ${updated.lead_time_days} 日`);
     });
 
   cmd

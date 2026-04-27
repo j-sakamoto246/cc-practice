@@ -22,6 +22,9 @@ inventory product list --format json
 inventory product update --sku "MBP-2024" --price 278000
 inventory product update --sku "MBP-2024" --name "MacBook Pro M4" --cost 200000
 
+# リードタイム（入荷までの日数）を設定 — 需要予測で使用
+inventory product set-lead-time --sku "MBP-2024" --days 14
+
 # 商品を削除
 inventory product delete --sku "MBP-2024"
 ```
@@ -43,14 +46,15 @@ MBP-2024,MacBook Pro,298000,200000,ノートPC,5
 ## 在庫管理 (stock)
 
 ```bash
-# 入庫
+# 入庫（任意でロット情報を付与）
 inventory stock in --sku "MBP-2024" --quantity 50 --warehouse "東京倉庫"
 inventory stock in --sku "MBP-2024" --quantity 10 --warehouse "大阪倉庫" --note "追加発注分"
+inventory stock in --sku "MILK-1" --quantity 20 --warehouse "東京倉庫" --lot-code "LOT-A" --expiry 2026-05-30
 
-# 出庫
+# 出庫（FIFO で自動的に古いロットから消費）
 inventory stock out --sku "MBP-2024" --quantity 5 --warehouse "東京倉庫"
 
-# 倉庫間移動
+# 倉庫間移動（移動元のロットを FIFO 消費し、移動先には期限を保ったロットを作成）
 inventory stock transfer --sku "MBP-2024" --from "東京倉庫" --to "大阪倉庫" --quantity 5
 
 # 在庫状況
@@ -58,6 +62,15 @@ inventory stock status
 inventory stock status --sku "MBP-2024"
 inventory stock status --warehouse "東京倉庫"
 inventory stock status --sku "MBP-2024" --warehouse "東京倉庫"
+
+# ロット一覧（FIFO 順）
+inventory stock lots
+inventory stock lots --sku "MILK-1"
+inventory stock lots --warehouse "東京倉庫" --include-empty
+
+# 期限切れ／期限間近のロット（既定: 30 日以内、期限切れ済みも含む）
+inventory stock expiring
+inventory stock expiring --days 7
 ```
 
 ## 受注管理 (order)
@@ -108,6 +121,35 @@ inventory accounting inventory-value
 # 売上データをCSVエクスポート
 inventory accounting export --from 2026-04-01 --to 2026-04-30 --output sales.csv
 ```
+
+## 需要予測 (forecast)
+
+過去の出庫履歴から移動平均・安全在庫・EOQ を算出し、発注推奨を出力する。詳細仕様は [docs/forecast.md](./docs/forecast.md) を参照。
+
+```bash
+# 単一商品の需要予測（時系列グラフ + CSV）
+inventory forecast --sku "MBP-2024" --days 30
+
+# 全商品まとめて（推奨発注量 Top20 のバーチャート + CSV）
+inventory forecast --days 60 --csv reports/forecast.csv
+
+# 倉庫を絞る・信頼水準と発注コストを変える
+inventory forecast --warehouse-id wh-tokyo --confidence 0.99 --order-cost 5000 --holding-rate 0.30
+```
+
+主なオプション:
+
+| オプション | デフォルト | 説明 |
+| --- | --- | --- |
+| `--sku <sku>` | 全商品 | 対象 SKU |
+| `--warehouse-id <id>` | 全倉庫合算 | 対象倉庫 |
+| `--days <n>` | `30` | ルックバック日数 |
+| `--confidence <c>` | `0.95` | 信頼水準（0.80 / 0.85 / 0.90 / 0.95 / 0.99） |
+| `--order-cost <s>` | `1000` | 1 回あたり発注コスト（円） |
+| `--holding-rate <h>` | `0.20` | 年間保管コスト率（原価比） |
+| `--csv <path>` | `forecast.csv` | CSV 出力先 |
+
+> 各商品の `lead_time_days` は `inventory product set-lead-time` で設定する。デフォルトは 7 日。
 
 ## マイグレーション (migrate)
 

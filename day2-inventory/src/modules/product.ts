@@ -10,6 +10,7 @@ export interface Product {
   price: number;
   cost: number;
   min_quantity: number;
+  lead_time_days: number;
   created_at: string;
   updated_at: string;
 }
@@ -163,6 +164,29 @@ async function getProductById(id: string): Promise<Product | null> {
   return rowToProduct(row);
 }
 
+export async function setLeadTime(sku: string, leadTimeDays: number): Promise<Product> {
+  if (!Number.isInteger(leadTimeDays) || leadTimeDays < 0) {
+    throw new Error("リードタイムは0以上の整数を指定してください");
+  }
+
+  const client = getClient();
+
+  const existing = await getProductBySku(sku);
+  if (!existing) {
+    throw new Error(`商品が見つかりません: SKU=${sku}`);
+  }
+
+  await client.execute({
+    sql: "UPDATE products SET lead_time_days = ?, updated_at = datetime('now') WHERE id = ?",
+    args: [leadTimeDays, existing.id],
+  });
+
+  logger.info(`リードタイムを設定しました: sku=${sku}, lead_time_days=${leadTimeDays}`);
+
+  const updated = await getProductBySku(sku);
+  return updated!;
+}
+
 export async function setMinQuantity(sku: string, minQuantity: number): Promise<Product> {
   if (minQuantity < 0) {
     throw new Error("最低在庫数は0以上を指定してください");
@@ -195,6 +219,7 @@ function rowToProduct(row: Record<string, unknown>): Product {
     price: row["price"] as number,
     cost: row["cost"] as number,
     min_quantity: row["min_quantity"] as number,
+    lead_time_days: row["lead_time_days"] as number,
     created_at: row["created_at"] as string,
     updated_at: row["updated_at"] as string,
   };

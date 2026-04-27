@@ -9,6 +9,7 @@ import { registerAccountingCommands } from "./cli/accounting.cmd.js";
 import { registerImportCommands } from "./cli/import.cmd.js";
 import { registerServeCommand } from "./cli/serve.cmd.js";
 import { registerMigrateCommands } from "./cli/migrate.cmd.js";
+import { registerForecastCommands } from "./cli/forecast.cmd.js";
 
 const program = new Command();
 
@@ -30,6 +31,7 @@ registerAccountingCommands(program);
 registerImportCommands(program);
 registerServeCommand(program);
 registerMigrateCommands(program);
+registerForecastCommands(program);
 
 program.parseAsync().catch((err: Error) => {
   console.error(`エラー: ${err.message}`);

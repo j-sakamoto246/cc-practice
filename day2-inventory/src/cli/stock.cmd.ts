@@ -7,9 +7,13 @@ import {
   getWarehouseByName,
   getAllStock,
   getStockAlerts,
+  listLots,
+  getExpiringLots,
 } from "../modules/stock.js";
 import { getProductBySku, setMinQuantity } from "../modules/product.js";
 import { formatTable } from "../utils/formatter.js";
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function resolveProductAndWarehouse(sku: string, warehouseName: string) {
   const product = await getProductBySku(sku);
@@ -61,25 +65,45 @@ export function registerStockCommands(parent: Command) {
 
   cmd
     .command("in")
-    .description("入庫")
+    .description("入庫（任意でロット情報を指定可能）")
     .requiredOption("--sku <sku>", "商品SKU")
     .requiredOption("--quantity <qty>", "数量", parseInt)
     .requiredOption("--warehouse <name>", "倉庫名")
+    .option("--lot-code <code>", "ロットコード", "")
+    .option("--expiry <YYYY-MM-DD>", "有効期限")
     .option("--note <note>", "備考", "")
-    .action(async (opts: { sku: string; quantity: number; warehouse: string; note: string }) => {
-      const resolved = await resolveProductAndWarehouse(opts.sku, opts.warehouse);
-      if (!resolved) return;
-      const movement = await stockIn({
-        product_id: resolved.product.id,
-        warehouse_id: resolved.warehouse.id,
-        quantity: opts.quantity,
-        reference_type: opts.note ? "manual" : "",
-        reference_id: opts.note,
-      });
-      console.log(
-        `入庫しました: ${opts.sku} x ${movement.quantity} → ${opts.warehouse}`,
-      );
-    });
+    .action(
+      async (opts: {
+        sku: string;
+        quantity: number;
+        warehouse: string;
+        lotCode: string;
+        expiry?: string;
+        note: string;
+      }) => {
+        if (opts.expiry && !ISO_DATE_RE.test(opts.expiry)) {
+          console.error("--expiry は YYYY-MM-DD 形式で指定してください");
+          process.exitCode = 1;
+          return;
+        }
+        const resolved = await resolveProductAndWarehouse(opts.sku, opts.warehouse);
+        if (!resolved) return;
+        const movement = await stockIn({
+          product_id: resolved.product.id,
+          warehouse_id: resolved.warehouse.id,
+          quantity: opts.quantity,
+          lot_code: opts.lotCode,
+          expiry_date: opts.expiry,
+          reference_type: opts.note ? "manual" : "",
+          reference_id: opts.note,
+        });
+        const lotLabel = opts.lotCode ? ` lot=${opts.lotCode}` : "";
+        const expiryLabel = opts.expiry ? ` 期限=${opts.expiry}` : "";
+        console.log(
+          `入庫しました: ${opts.sku} x ${movement.quantity} → ${opts.warehouse}${lotLabel}${expiryLabel}`,
+        );
+      },
+    );
 
   cmd
     .command("out")
@@ -199,5 +223,84 @@ export function registerStockCommands(parent: Command) {
           `${a.sku}: 現在在庫 ${a.total_quantity} / 最低在庫 ${a.min_quantity} - 要発注`,
         );
       }
+    });
+
+  cmd
+    .command("lots")
+    .description("ロット一覧（FIFO 順）")
+    .option("--sku <sku>", "商品SKU で絞り込み")
+    .option("--warehouse <name>", "倉庫名で絞り込み")
+    .option("--include-empty", "残量 0 のロットも表示", false)
+    .action(async (opts: { sku?: string; warehouse?: string; includeEmpty: boolean }) => {
+      const filter: { product_id?: string; warehouse_id?: string; include_empty?: boolean } = {
+        include_empty: opts.includeEmpty,
+      };
+      if (opts.sku) {
+        const product = await getProductBySku(opts.sku);
+        if (!product) {
+          console.error(`商品が見つかりません: SKU=${opts.sku}`);
+          process.exitCode = 1;
+          return;
+        }
+        filter.product_id = product.id;
+      }
+      if (opts.warehouse) {
+        const warehouse = await getWarehouseByName(opts.warehouse);
+        if (!warehouse) {
+          console.error(`倉庫が見つかりません: ${opts.warehouse}`);
+          process.exitCode = 1;
+          return;
+        }
+        filter.warehouse_id = warehouse.id;
+      }
+
+      const lots = await listLots(filter);
+      if (lots.length === 0) {
+        console.log("該当するロットはありません");
+        return;
+      }
+      console.log(
+        formatTable(
+          ["SKU", "倉庫", "ロット", "残量", "期限", "入庫日時"],
+          lots.map((l) => [
+            l.sku,
+            l.warehouse_name,
+            l.lot_code || "-",
+            String(l.quantity_remaining),
+            l.expiry_date ?? "-",
+            l.received_at,
+          ]),
+        ),
+      );
+    });
+
+  cmd
+    .command("expiring")
+    .description("期限切れ／期限間近のロットを表示")
+    .option("--days <n>", "何日先まで含めるか（デフォルト 30）", (v) => parseInt(v, 10), 30)
+    .action(async (opts: { days: number }) => {
+      if (!Number.isFinite(opts.days) || opts.days < 0) {
+        console.error("--days は 0 以上の整数を指定してください");
+        process.exitCode = 1;
+        return;
+      }
+      const lots = await getExpiringLots(opts.days);
+      if (lots.length === 0) {
+        console.log(`期限が${opts.days}日以内のロットはありません`);
+        return;
+      }
+      console.log(
+        formatTable(
+          ["SKU", "倉庫", "ロット", "残量", "期限", "残日数"],
+          lots.map((l) => [
+            l.sku,
+            l.warehouse_name,
+            l.lot_code || "-",
+            String(l.quantity_remaining),
+            l.expiry_date,
+            l.days_until_expiry < 0 ? `期限切れ(${l.days_until_expiry})` : String(l.days_until_expiry),
+          ]),
+        ),
+      );
     });
 }
