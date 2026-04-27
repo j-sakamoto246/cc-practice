@@ -8,6 +8,7 @@ import { registerCampaignCommands } from "./cli/campaign.cmd.js";
 import { registerAccountingCommands } from "./cli/accounting.cmd.js";
 import { registerImportCommands } from "./cli/import.cmd.js";
 import { registerServeCommand } from "./cli/serve.cmd.js";
+import { registerMigrateCommands } from "./cli/migrate.cmd.js";
 
 const program = new Command();
 
@@ -17,6 +18,7 @@ program
   .description("CLI-based inventory management system")
   .hook("preAction", async (_thisCommand, actionCommand) => {
     if (actionCommand.name() === "serve") return;
+    if (actionCommand.parent?.name() === "migrate") return;
     await initDatabase();
   });
 
@@ -27,6 +29,7 @@ registerCampaignCommands(program);
 registerAccountingCommands(program);
 registerImportCommands(program);
 registerServeCommand(program);
+registerMigrateCommands(program);
 
 program.parseAsync().catch((err: Error) => {
   console.error(`エラー: ${err.message}`);

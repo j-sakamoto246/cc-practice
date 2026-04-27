@@ -1,5 +1,5 @@
 import { createClient, type Client } from "@libsql/client";
-import { runMigrations } from "./schema.js";
+import { migrateUp } from "./migrator.js";
 
 let client: Client | null = null;
 
@@ -14,7 +14,9 @@ export async function initDatabase(url?: string): Promise<Client> {
   client = createClient({
     url: url ?? `file:${process.cwd()}/data/inventory.db`,
   });
-  await runMigrations(client);
+  await client.execute("PRAGMA foreign_keys = ON");
+  await client.execute("PRAGMA journal_mode = WAL");
+  await migrateUp(client);
   return client;
 }
 

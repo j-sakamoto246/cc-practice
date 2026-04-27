@@ -23,8 +23,9 @@ CLI-based inventory management system using libSQL (SQLite-compatible), TypeScri
 - **services/** — Business logic, orchestrates multiple repositories, uses `client.batch()` for atomic multi-table operations
 - **repositories/** — SQL queries only. Each repo receives `Client` via constructor (DI for testability)
 - **models/** — Zod schemas + TypeScript types only. No logic
-- **db/client.ts** — libSQL singleton. `initDatabase(url?)` creates client + runs migrations. Tests pass `"file::memory:"`
-- **db/schema.ts** — All CREATE TABLE statements in FK-dependency order
+- **db/client.ts** — libSQL singleton. `initDatabase(url?)` creates client + auto-applies pending migrations. Tests pass `"file::memory:"`
+- **db/migrator.ts** — Migration loader/runner. Reads `migrations/NNN_<name>.sql` (single file with `-- +migrate Up` / `-- +migrate Down` markers), tracks applied versions in `schema_migrations` table, runs each migration inside a `BEGIN/COMMIT` transaction
+- **migrations/** — Versioned schema files. Manage via `npm run dev -- migrate up|down|status|create <name>`. `down` reverts the last applied migration only; chain `down` calls to roll back further
 
 ### Hybrid inventory model
 
