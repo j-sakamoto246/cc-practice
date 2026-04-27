@@ -36,6 +36,20 @@ export interface StockOutInput {
   reference_id?: string;
 }
 
+export interface StockTransferInput {
+  product_id: string;
+  from_warehouse_id: string;
+  to_warehouse_id: string;
+  quantity: number;
+  reference_type?: string;
+  reference_id?: string;
+}
+
+export interface StockTransferResult {
+  out: StockMovement;
+  in: StockMovement;
+}
+
 export async function stockIn(input: StockInInput): Promise<StockMovement> {
   const client = getClient();
 
@@ -129,6 +143,88 @@ export async function stockOut(input: StockOutInput): Promise<StockMovement> {
     args: [movementId],
   });
   return rowToMovement(result.rows[0]!);
+}
+
+export async function stockTransfer(input: StockTransferInput): Promise<StockTransferResult> {
+  const client = getClient();
+
+  if (input.quantity <= 0) {
+    throw new Error("移動数量は1以上を指定してください");
+  }
+
+  if (input.from_warehouse_id === input.to_warehouse_id) {
+    throw new Error("移動元と移動先には異なる倉庫を指定してください");
+  }
+
+  const current = await getStockStatus(input.product_id, input.from_warehouse_id);
+  if (current.quantity < input.quantity) {
+    throw new InsufficientStockError(current.quantity, input.quantity);
+  }
+
+  const transferId = input.reference_id || generateId();
+  const outMovementId = generateId();
+  const inMovementId = generateId();
+  const toInventoryId = generateId();
+  const referenceType = input.reference_type ?? "transfer";
+
+  await client.batch([
+    {
+      sql: `INSERT INTO stock_movements (id, product_id, warehouse_id, type, quantity, reference_type, reference_id)
+            VALUES (?, ?, ?, 'out', ?, ?, ?)`,
+      args: [
+        outMovementId,
+        input.product_id,
+        input.from_warehouse_id,
+        input.quantity,
+        referenceType,
+        transferId,
+      ],
+    },
+    {
+      sql: `UPDATE inventory SET quantity = quantity - ?, updated_at = datetime('now')
+            WHERE product_id = ? AND warehouse_id = ?`,
+      args: [input.quantity, input.product_id, input.from_warehouse_id],
+    },
+    {
+      sql: `INSERT INTO stock_movements (id, product_id, warehouse_id, type, quantity, reference_type, reference_id)
+            VALUES (?, ?, ?, 'in', ?, ?, ?)`,
+      args: [
+        inMovementId,
+        input.product_id,
+        input.to_warehouse_id,
+        input.quantity,
+        referenceType,
+        transferId,
+      ],
+    },
+    {
+      sql: `INSERT INTO inventory (id, product_id, warehouse_id, quantity)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(product_id, warehouse_id)
+            DO UPDATE SET quantity = quantity + ?, updated_at = datetime('now')`,
+      args: [
+        toInventoryId,
+        input.product_id,
+        input.to_warehouse_id,
+        input.quantity,
+        input.quantity,
+      ],
+    },
+  ]);
+
+  logger.info(
+    `在庫移動しました: product=${input.product_id}, from=${input.from_warehouse_id}, to=${input.to_warehouse_id}, quantity=${input.quantity}`,
+  );
+
+  const result = await client.execute({
+    sql: "SELECT * FROM stock_movements WHERE id IN (?, ?)",
+    args: [outMovementId, inMovementId],
+  });
+  const movements = result.rows.map((row) => rowToMovement(row));
+  const out = movements.find((movement) => movement.id === outMovementId)!;
+  const inbound = movements.find((movement) => movement.id === inMovementId)!;
+
+  return { out, in: inbound };
 }
 
 export async function getWarehouseByName(name: string) {

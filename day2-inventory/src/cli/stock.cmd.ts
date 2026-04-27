@@ -2,6 +2,7 @@ import { Command } from "commander";
 import {
   stockIn,
   stockOut,
+  stockTransfer,
   getStockStatus,
   getWarehouseByName,
   getAllStock,
@@ -24,6 +25,35 @@ export async function resolveProductAndWarehouse(sku: string, warehouseName: str
     return null;
   }
   return { product, warehouse };
+}
+
+export async function resolveProductAndWarehouses(
+  sku: string,
+  fromWarehouseName: string,
+  toWarehouseName: string,
+) {
+  const product = await getProductBySku(sku);
+  if (!product) {
+    console.error(`商品が見つかりません: SKU=${sku}`);
+    process.exitCode = 1;
+    return null;
+  }
+
+  const fromWarehouse = await getWarehouseByName(fromWarehouseName);
+  if (!fromWarehouse) {
+    console.error(`移動元倉庫が見つかりません: ${fromWarehouseName}`);
+    process.exitCode = 1;
+    return null;
+  }
+
+  const toWarehouse = await getWarehouseByName(toWarehouseName);
+  if (!toWarehouse) {
+    console.error(`移動先倉庫が見つかりません: ${toWarehouseName}`);
+    process.exitCode = 1;
+    return null;
+  }
+
+  return { product, fromWarehouse, toWarehouse };
 }
 
 export function registerStockCommands(parent: Command) {
@@ -70,6 +100,32 @@ export function registerStockCommands(parent: Command) {
       });
       console.log(
         `出庫しました: ${opts.sku} x ${movement.quantity} ← ${opts.warehouse}`,
+      );
+    });
+
+  cmd
+    .command("transfer")
+    .description("倉庫間在庫移動")
+    .requiredOption("--sku <sku>", "商品SKU")
+    .requiredOption("--quantity <qty>", "数量", parseInt)
+    .requiredOption("--from <name>", "移動元倉庫名")
+    .requiredOption("--to <name>", "移動先倉庫名")
+    .option("--note <note>", "備考", "")
+    .action(async (opts: { sku: string; quantity: number; from: string; to: string; note: string }) => {
+      const resolved = await resolveProductAndWarehouses(opts.sku, opts.from, opts.to);
+      if (!resolved) return;
+
+      const transfer = await stockTransfer({
+        product_id: resolved.product.id,
+        from_warehouse_id: resolved.fromWarehouse.id,
+        to_warehouse_id: resolved.toWarehouse.id,
+        quantity: opts.quantity,
+        reference_type: opts.note ? "manual_transfer" : "transfer",
+        reference_id: opts.note,
+      });
+
+      console.log(
+        `在庫を移動しました: ${opts.sku} x ${transfer.out.quantity} ${opts.from} → ${opts.to}`,
       );
     });
 

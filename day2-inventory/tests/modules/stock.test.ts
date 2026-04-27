@@ -4,6 +4,7 @@ import { InsufficientStockError } from "../../src/errors/insufficient-stock.js";
 import {
   stockIn,
   stockOut,
+  stockTransfer,
   getStockStatus,
   getStockAlerts,
 } from "../../src/modules/stock.js";
@@ -272,6 +273,134 @@ describe("stock module", () => {
       await expect(
         stockOut({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 8 }),
       ).rejects.toBeInstanceOf(InsufficientStockError);
+    });
+  });
+
+  // ============================================================
+  // stockTransfer
+  // ============================================================
+  describe("stockTransfer", () => {
+    it("倉庫間で在庫を移動できる", async () => {
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 10 });
+
+      const transfer = await stockTransfer({
+        product_id: "prod-1",
+        from_warehouse_id: "wh-1",
+        to_warehouse_id: "wh-2",
+        quantity: 4,
+      });
+
+      expect(transfer.out.type).toBe("out");
+      expect(transfer.out.warehouse_id).toBe("wh-1");
+      expect(transfer.out.quantity).toBe(4);
+      expect(transfer.in.type).toBe("in");
+      expect(transfer.in.warehouse_id).toBe("wh-2");
+      expect(transfer.in.quantity).toBe(4);
+      expect(transfer.out.reference_type).toBe("transfer");
+      expect(transfer.in.reference_type).toBe("transfer");
+      expect(transfer.out.reference_id).toBe(transfer.in.reference_id);
+
+      expect((await getStockStatus("prod-1", "wh-1")).quantity).toBe(6);
+      expect((await getStockStatus("prod-1", "wh-2")).quantity).toBe(4);
+    });
+
+    it("移動先に既存在庫がある場合は加算される", async () => {
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 10 });
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-2", quantity: 3 });
+
+      await stockTransfer({
+        product_id: "prod-1",
+        from_warehouse_id: "wh-1",
+        to_warehouse_id: "wh-2",
+        quantity: 5,
+      });
+
+      expect((await getStockStatus("prod-1", "wh-1")).quantity).toBe(5);
+      expect((await getStockStatus("prod-1", "wh-2")).quantity).toBe(8);
+    });
+
+    it("移動の出庫と入庫が stock_movements に記録される", async () => {
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 10 });
+
+      const transfer = await stockTransfer({
+        product_id: "prod-1",
+        from_warehouse_id: "wh-1",
+        to_warehouse_id: "wh-2",
+        quantity: 5,
+        reference_id: "transfer-001",
+      });
+
+      const client = getClient();
+      const result = await client.execute({
+        sql: "SELECT type, warehouse_id, quantity, reference_type, reference_id FROM stock_movements WHERE reference_id = ? ORDER BY type DESC",
+        args: ["transfer-001"],
+      });
+
+      expect(result.rows).toHaveLength(2);
+      expect(result.rows.map((row) => row["type"])).toEqual(["out", "in"]);
+      expect(result.rows.map((row) => row["warehouse_id"])).toEqual(["wh-1", "wh-2"]);
+      expect(result.rows.every((row) => row["quantity"] === 5)).toBe(true);
+      expect(transfer.out.reference_id).toBe("transfer-001");
+      expect(transfer.in.reference_id).toBe("transfer-001");
+    });
+
+    it("移動先の入庫に失敗した場合は移動元の出庫もロールバックされる", async () => {
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 10 });
+
+      await expect(
+        stockTransfer({
+          product_id: "prod-1",
+          from_warehouse_id: "wh-1",
+          to_warehouse_id: "nonexistent",
+          quantity: 5,
+        }),
+      ).rejects.toThrow();
+
+      expect((await getStockStatus("prod-1", "wh-1")).quantity).toBe(10);
+
+      const client = getClient();
+      const movements = await client.execute({
+        sql: "SELECT type, warehouse_id FROM stock_movements WHERE product_id = ? ORDER BY created_at",
+        args: ["prod-1"],
+      });
+      expect(movements.rows).toHaveLength(1);
+      expect(movements.rows[0]!["type"]).toBe("in");
+      expect(movements.rows[0]!["warehouse_id"]).toBe("wh-1");
+    });
+
+    it("在庫不足だと InsufficientStockError になる", async () => {
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 3 });
+
+      await expect(
+        stockTransfer({
+          product_id: "prod-1",
+          from_warehouse_id: "wh-1",
+          to_warehouse_id: "wh-2",
+          quantity: 4,
+        }),
+      ).rejects.toBeInstanceOf(InsufficientStockError);
+    });
+
+    it("数量が0だとエラーになる", async () => {
+      await expect(
+        stockTransfer({
+          product_id: "prod-1",
+          from_warehouse_id: "wh-1",
+          to_warehouse_id: "wh-2",
+          quantity: 0,
+        }),
+      ).rejects.toThrow("移動数量は1以上を指定してください");
+    });
+
+    it("移動元と移動先が同じ倉庫だとエラーになる", async () => {
+      await expect(
+        stockTransfer({
+          product_id: "prod-1",
+          from_warehouse_id: "wh-1",
+          to_warehouse_id: "wh-1",
+          quantity: 1,
+        }),
+      ).rejects.toThrow("移動元と移動先には異なる倉庫を指定してください");
     });
   });
 

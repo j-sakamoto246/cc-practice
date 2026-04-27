@@ -34,6 +34,9 @@ inventory stock in --sku "MBP-2024" --quantity 10 --warehouse "大阪倉庫" --n
 # 出庫
 inventory stock out --sku "MBP-2024" --quantity 5 --warehouse "東京倉庫"
 
+# 倉庫間移動
+inventory stock transfer --sku "MBP-2024" --from "東京倉庫" --to "大阪倉庫" --quantity 5
+
 # 在庫状況
 inventory stock status
 inventory stock status --sku "MBP-2024"
