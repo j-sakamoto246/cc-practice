@@ -1,5 +1,13 @@
 {
   "version": "5",
+  "specifiers": {
+    "jsr:@hono/hono@4": "4.12.10"
+  },
+  "jsr": {
+    "@hono/hono@4.12.10": {
+      "integrity": "6e608e50bb13fd0933e86fda95d31c1ff57d1c8774ed585d6a8b8fc1bdd82c82"
+    }
+  },
   "remote": {
     "https://deno.land/std@0.224.0/assert/_constants.ts": "a271e8ef5a573f1df8e822a6eb9d09df064ad66a4390f21b3e31f820a38e0975",
     "https://deno.land/std@0.224.0/assert/assert.ts": "09d30564c09de846855b7b071e62b5974b001bb72a4b797958fe0660e7849834",

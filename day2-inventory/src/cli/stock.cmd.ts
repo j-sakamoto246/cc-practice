@@ -5,11 +5,12 @@ import {
   getStockStatus,
   getWarehouseByName,
   getAllStock,
+  getStockAlerts,
 } from "../modules/stock.js";
-import { getProductBySku } from "../modules/product.js";
+import { getProductBySku, setMinQuantity } from "../modules/product.js";
 import { formatTable } from "../utils/formatter.js";
 
-async function resolveProductAndWarehouse(sku: string, warehouseName: string) {
+export async function resolveProductAndWarehouse(sku: string, warehouseName: string) {
   const product = await getProductBySku(sku);
   if (!product) {
     console.error(`商品が見つかりません: SKU=${sku}`);
@@ -109,5 +110,38 @@ export function registerStockCommands(parent: Command) {
           filtered.map((s) => [s.sku, s.product_name, s.warehouse_name, String(s.quantity)]),
         ),
       );
+    });
+
+  cmd
+    .command("set-threshold")
+    .description("最低在庫数（発注閾値）を設定")
+    .requiredOption("--sku <sku>", "商品SKU")
+    .requiredOption("--min <qty>", "最低在庫数", parseInt)
+    .action(async (opts: { sku: string; min: number }) => {
+      try {
+        const product = await setMinQuantity(opts.sku, opts.min);
+        console.log(
+          `最低在庫数を設定しました: ${product.sku} → ${product.min_quantity}`,
+        );
+      } catch (err) {
+        console.error((err as Error).message);
+        process.exitCode = 1;
+      }
+    });
+
+  cmd
+    .command("alerts")
+    .description("最低在庫を下回っている商品を表示")
+    .action(async () => {
+      const alerts = await getStockAlerts();
+      if (alerts.length === 0) {
+        console.log("アラート対象の在庫はありません");
+        return;
+      }
+      for (const a of alerts) {
+        console.log(
+          `${a.sku}: 現在在庫 ${a.total_quantity} / 最低在庫 ${a.min_quantity} - 要発注`,
+        );
+      }
     });
 }

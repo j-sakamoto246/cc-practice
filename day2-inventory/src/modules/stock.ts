@@ -162,6 +162,37 @@ export async function getAllStock() {
   }));
 }
 
+export interface StockAlert {
+  product_id: string;
+  sku: string;
+  product_name: string;
+  total_quantity: number;
+  min_quantity: number;
+}
+
+export async function getStockAlerts(): Promise<StockAlert[]> {
+  const client = getClient();
+
+  const result = await client.execute(
+    `SELECT p.id AS product_id, p.sku, p.name AS product_name, p.min_quantity,
+            COALESCE(SUM(i.quantity), 0) AS total_quantity
+     FROM products p
+     LEFT JOIN inventory i ON i.product_id = p.id
+     WHERE p.min_quantity > 0
+     GROUP BY p.id, p.sku, p.name, p.min_quantity
+     HAVING COALESCE(SUM(i.quantity), 0) <= p.min_quantity
+     ORDER BY p.sku`,
+  );
+
+  return result.rows.map((row) => ({
+    product_id: row["product_id"] as string,
+    sku: row["sku"] as string,
+    product_name: row["product_name"] as string,
+    total_quantity: Number(row["total_quantity"]),
+    min_quantity: row["min_quantity"] as number,
+  }));
+}
+
 export async function getStockStatus(
   productId: string,
   warehouseId: string,

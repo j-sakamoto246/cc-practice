@@ -5,6 +5,8 @@ import {
   listOrders,
   updateOrderStatus,
 } from "../../src/modules/order.js";
+import { InsufficientStockError } from "../../src/errors/insufficient-stock.js";
+import { stockIn } from "../../src/modules/stock.js";
 
 async function seedMasterData() {
   const client = getClient();
@@ -16,6 +18,10 @@ async function seedMasterData() {
     {
       sql: "INSERT INTO products (id, sku, name, price, cost) VALUES (?, ?, ?, ?, ?)",
       args: ["prod-2", "SKU-002", "商品B", 2000, 800],
+    },
+    {
+      sql: "INSERT INTO warehouses (id, name, location) VALUES (?, ?, ?)",
+      args: ["wh-1", "東京倉庫", "東京"],
     },
   ]);
 }
@@ -304,6 +310,74 @@ describe("order module", () => {
       await expect(
         updateOrderStatus(order.id, "invalid_status"),
       ).rejects.toThrow("無効なステータスです: invalid_status");
+    });
+  });
+
+  // ============================================================
+  // 在庫チェック付き受注作成
+  // ============================================================
+  describe("createOrder (在庫チェック)", () => {
+    it("在庫が足りない商品で受注を作成するとエラーになる", async () => {
+      // 在庫5個に対して10個の受注
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 5 });
+
+      const error = await createOrder({
+        customer_name: "テスト顧客",
+        items: [{ product_id: "prod-1", quantity: 10, unit_price: 1000 }],
+        warehouse_id: "wh-1",
+      }).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(InsufficientStockError);
+      expect((error as InsufficientStockError).currentQuantity).toBe(5);
+      expect((error as InsufficientStockError).requestedQuantity).toBe(10);
+    });
+
+    it("在庫が0の商品で受注を作成するとエラーになる", async () => {
+      await expect(
+        createOrder({
+          customer_name: "テスト顧客",
+          items: [{ product_id: "prod-1", quantity: 1, unit_price: 1000 }],
+          warehouse_id: "wh-1",
+        }),
+      ).rejects.toBeInstanceOf(InsufficientStockError);
+    });
+
+    it("在庫ちょうどの数量で受注を作成できる", async () => {
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 5 });
+
+      const order = await createOrder({
+        customer_name: "テスト顧客",
+        items: [{ product_id: "prod-1", quantity: 5, unit_price: 1000 }],
+        warehouse_id: "wh-1",
+      });
+
+      expect(order.id).toBeDefined();
+      expect(order.total_amount).toBe(5000);
+    });
+
+    it("複数明細で1つでも在庫不足ならエラーになる", async () => {
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 100 });
+      await stockIn({ product_id: "prod-2", warehouse_id: "wh-1", quantity: 2 });
+
+      await expect(
+        createOrder({
+          customer_name: "テスト顧客",
+          items: [
+            { product_id: "prod-1", quantity: 3, unit_price: 1000 },
+            { product_id: "prod-2", quantity: 5, unit_price: 2000 },
+          ],
+          warehouse_id: "wh-1",
+        }),
+      ).rejects.toBeInstanceOf(InsufficientStockError);
+    });
+
+    it("warehouse_id を省略した場合は在庫チェックなしで受注できる", async () => {
+      const order = await createOrder({
+        customer_name: "テスト顧客",
+        items: [{ product_id: "prod-1", quantity: 100, unit_price: 1000 }],
+      });
+
+      expect(order.id).toBeDefined();
     });
   });
 });

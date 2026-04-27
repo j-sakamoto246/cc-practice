@@ -9,6 +9,7 @@ export interface Product {
   description: string;
   price: number;
   cost: number;
+  min_quantity: number;
   created_at: string;
   updated_at: string;
 }
@@ -31,6 +32,11 @@ export interface UpdateProductInput {
 export async function addProduct(input: AddProductInput): Promise<Product> {
   const client = getClient();
   const id = generateId();
+
+  const existing = await getProductBySku(input.sku);
+  if (existing) {
+    throw new Error(`SKU が既に存在します: ${input.sku}`);
+  }
 
   await client.execute({
     sql: `INSERT INTO products (id, sku, name, description, price, cost)
@@ -148,6 +154,29 @@ async function getProductById(id: string): Promise<Product | null> {
   return rowToProduct(row);
 }
 
+export async function setMinQuantity(sku: string, minQuantity: number): Promise<Product> {
+  if (minQuantity < 0) {
+    throw new Error("最低在庫数は0以上を指定してください");
+  }
+
+  const client = getClient();
+
+  const existing = await getProductBySku(sku);
+  if (!existing) {
+    throw new Error(`商品が見つかりません: SKU=${sku}`);
+  }
+
+  await client.execute({
+    sql: "UPDATE products SET min_quantity = ?, updated_at = datetime('now') WHERE id = ?",
+    args: [minQuantity, existing.id],
+  });
+
+  logger.info(`最低在庫数を設定しました: sku=${sku}, min_quantity=${minQuantity}`);
+
+  const updated = await getProductBySku(sku);
+  return updated!;
+}
+
 function rowToProduct(row: Record<string, unknown>): Product {
   return {
     id: row["id"] as string,
@@ -156,6 +185,7 @@ function rowToProduct(row: Record<string, unknown>): Product {
     description: row["description"] as string,
     price: row["price"] as number,
     cost: row["cost"] as number,
+    min_quantity: row["min_quantity"] as number,
     created_at: row["created_at"] as string,
     updated_at: row["updated_at"] as string,
   };

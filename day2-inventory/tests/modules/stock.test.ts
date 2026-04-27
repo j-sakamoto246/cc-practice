@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { getClient } from "../../src/db/client.js";
 import { InsufficientStockError } from "../../src/errors/insufficient-stock.js";
-import { stockIn, stockOut, getStockStatus } from "../../src/modules/stock.js";
+import {
+  stockIn,
+  stockOut,
+  getStockStatus,
+  getStockAlerts,
+} from "../../src/modules/stock.js";
+import { setMinQuantity } from "../../src/modules/product.js";
 
 // テスト用のマスタデータを事前投入
 async function seedMasterData() {
@@ -227,6 +233,29 @@ describe("stock module", () => {
       ).rejects.toThrow("出庫数量は1以上を指定してください");
     });
 
+    it("存在しない product_id での出庫は InsufficientStockError になる", async () => {
+      const error = await stockOut({
+        product_id: "nonexistent",
+        warehouse_id: "wh-1",
+        quantity: 1,
+      }).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(InsufficientStockError);
+      expect((error as InsufficientStockError).currentQuantity).toBe(0);
+      expect((error as InsufficientStockError).requestedQuantity).toBe(1);
+    });
+
+    it("存在しない warehouse_id での出庫は InsufficientStockError になる", async () => {
+      const error = await stockOut({
+        product_id: "prod-1",
+        warehouse_id: "nonexistent",
+        quantity: 1,
+      }).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(InsufficientStockError);
+      expect((error as InsufficientStockError).currentQuantity).toBe(0);
+    });
+
     // --- 境界値 ---
     it("在庫ちょうどの数量で出庫できる", async () => {
       await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 7 });
@@ -286,6 +315,127 @@ describe("stock module", () => {
 
       const status = await getStockStatus("prod-1", "wh-1");
       expect(status.quantity).toBe(30); // 100 - 30 + 10 - 50
+    });
+  });
+
+  // ============================================================
+  // 在庫アラート (getStockAlerts)
+  // 閾値は商品単位 (products.min_quantity)、判定は全倉庫合計 <= 閾値
+  // ============================================================
+  describe("getStockAlerts", () => {
+    // --- 正常系 ---
+    it("全倉庫合計が最低在庫を下回っている場合にアラートを返す", async () => {
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 10 });
+      await setMinQuantity("SKU-001", 15);
+
+      const alerts = await getStockAlerts();
+
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]!.product_id).toBe("prod-1");
+      expect(alerts[0]!.sku).toBe("SKU-001");
+      expect(alerts[0]!.product_name).toBe("テスト商品A");
+      expect(alerts[0]!.total_quantity).toBe(10);
+      expect(alerts[0]!.min_quantity).toBe(15);
+    });
+
+    it("閾値ちょうどでもアラートが出る (<= 判定)", async () => {
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 5 });
+      await setMinQuantity("SKU-001", 5);
+
+      const alerts = await getStockAlerts();
+
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]!.total_quantity).toBe(5);
+      expect(alerts[0]!.min_quantity).toBe(5);
+    });
+
+    it("閾値を超えている場合はアラートが出ない", async () => {
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 20 });
+      await setMinQuantity("SKU-001", 5);
+
+      const alerts = await getStockAlerts();
+
+      expect(alerts).toHaveLength(0);
+    });
+
+    it("min_quantity が 0 (デフォルト) の場合はアラートが出ない", async () => {
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 10 });
+
+      const alerts = await getStockAlerts();
+
+      expect(alerts).toHaveLength(0);
+    });
+
+    it("在庫レコードがなく閾値が設定されていればアラート対象になる", async () => {
+      await setMinQuantity("SKU-001", 10);
+
+      const alerts = await getStockAlerts();
+
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]!.total_quantity).toBe(0);
+      expect(alerts[0]!.min_quantity).toBe(10);
+    });
+
+    it("複数倉庫の在庫は合計で判定される", async () => {
+      // 東京: 6, 大阪: 4 → 合計10、閾値10 → アラート（<=）
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 6 });
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-2", quantity: 4 });
+      await setMinQuantity("SKU-001", 10);
+
+      const alerts = await getStockAlerts();
+
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]!.total_quantity).toBe(10);
+    });
+
+    it("複数倉庫の合計が閾値を超えていればアラートは出ない", async () => {
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 6 });
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-2", quantity: 5 });
+      await setMinQuantity("SKU-001", 10);
+
+      const alerts = await getStockAlerts();
+
+      expect(alerts).toHaveLength(0);
+    });
+
+    it("複数商品で下回っている分だけアラートを返す", async () => {
+      // prod-1: 在庫3, 閾値10 → アラート
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 3 });
+      await setMinQuantity("SKU-001", 10);
+
+      // prod-2: 在庫20, 閾値5 → OK
+      await stockIn({ product_id: "prod-2", warehouse_id: "wh-1", quantity: 20 });
+      await setMinQuantity("SKU-002", 5);
+
+      const alerts = await getStockAlerts();
+
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]!.sku).toBe("SKU-001");
+    });
+
+    it("出庫で閾値を下回るとアラート対象になる", async () => {
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 10 });
+      await setMinQuantity("SKU-001", 5);
+
+      // 出庫前: 10 > 5 → OK
+      expect(await getStockAlerts()).toHaveLength(0);
+
+      // 出庫後: 3 <= 5 → アラート
+      await stockOut({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 7 });
+
+      const alerts = await getStockAlerts();
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]!.total_quantity).toBe(3);
+    });
+
+    it("結果は SKU 昇順で返る", async () => {
+      await stockIn({ product_id: "prod-2", warehouse_id: "wh-1", quantity: 1 });
+      await setMinQuantity("SKU-002", 10);
+      await stockIn({ product_id: "prod-1", warehouse_id: "wh-1", quantity: 1 });
+      await setMinQuantity("SKU-001", 10);
+
+      const alerts = await getStockAlerts();
+      expect(alerts.map((a) => a.sku)).toEqual(["SKU-001", "SKU-002"]);
     });
   });
 });

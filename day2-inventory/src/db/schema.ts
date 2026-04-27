@@ -3,14 +3,15 @@ import type { Client } from "@libsql/client";
 const SCHEMA_STATEMENTS = [
   // 商品マスタ
   `CREATE TABLE IF NOT EXISTS products (
-    id          TEXT PRIMARY KEY,
-    sku         TEXT NOT NULL UNIQUE,
-    name        TEXT NOT NULL,
-    description TEXT DEFAULT '',
-    price       REAL NOT NULL CHECK (price >= 0),
-    cost        REAL NOT NULL CHECK (cost >= 0),
-    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    id           TEXT PRIMARY KEY,
+    sku          TEXT NOT NULL UNIQUE,
+    name         TEXT NOT NULL,
+    description  TEXT DEFAULT '',
+    price        REAL NOT NULL CHECK (price >= 0),
+    cost         REAL NOT NULL CHECK (cost >= 0),
+    min_quantity INTEGER NOT NULL DEFAULT 0 CHECK (min_quantity >= 0),
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
   `CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku)`,
 

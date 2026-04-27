@@ -1,4 +1,6 @@
 import { getClient } from "../db/client.js";
+import { InsufficientStockError } from "../errors/insufficient-stock.js";
+import { getStockStatus } from "./stock.js";
 import { generateId } from "../utils/id.js";
 import { logger } from "../utils/logger.js";
 
@@ -33,6 +35,7 @@ export interface CreateOrderItemInput {
 export interface CreateOrderInput {
   customer_name: string;
   items: CreateOrderItemInput[];
+  warehouse_id?: string;
 }
 
 const VALID_STATUSES = [
@@ -60,6 +63,16 @@ export async function createOrder(
 
   if (input.items.length === 0) {
     throw new Error("受注には1つ以上の明細が必要です");
+  }
+
+  // warehouse_id が指定されている場合は在庫チェック
+  if (input.warehouse_id) {
+    for (const item of input.items) {
+      const status = await getStockStatus(item.product_id, input.warehouse_id);
+      if (status.quantity < item.quantity) {
+        throw new InsufficientStockError(status.quantity, item.quantity);
+      }
+    }
   }
 
   const orderId = generateId();

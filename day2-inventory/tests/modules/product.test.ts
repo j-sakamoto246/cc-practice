@@ -5,6 +5,7 @@ import {
   listProducts,
   updateProduct,
   deleteProduct,
+  setMinQuantity,
 } from "../../src/modules/product.js";
 
 describe("product module", () => {
@@ -77,7 +78,9 @@ describe("product module", () => {
     it("SKU が重複するとエラーになる", async () => {
       await addProduct(sampleInput);
 
-      await expect(addProduct(sampleInput)).rejects.toThrow();
+      await expect(addProduct(sampleInput)).rejects.toThrow(
+        "SKU が既に存在します: TEST-001",
+      );
     });
 
     it("price が負数だと CHECK 制約違反でエラーになる", async () => {
@@ -454,6 +457,48 @@ describe("product module", () => {
 
       const products = await listProducts();
       expect(products).toEqual([]);
+    });
+  });
+
+  // ============================================================
+  // setMinQuantity
+  // ============================================================
+  describe("setMinQuantity", () => {
+    it("商品作成直後の min_quantity はデフォルト 0", async () => {
+      const product = await addProduct(sampleInput);
+      expect(product.min_quantity).toBe(0);
+    });
+
+    it("最低在庫数を設定できる", async () => {
+      await addProduct(sampleInput);
+
+      const updated = await setMinQuantity("TEST-001", 10);
+
+      expect(updated.min_quantity).toBe(10);
+      expect(updated.sku).toBe("TEST-001");
+    });
+
+    it("最低在庫数を 0 に戻せる", async () => {
+      await addProduct(sampleInput);
+      await setMinQuantity("TEST-001", 10);
+
+      const updated = await setMinQuantity("TEST-001", 0);
+
+      expect(updated.min_quantity).toBe(0);
+    });
+
+    it("存在しない SKU だとエラーになる", async () => {
+      await expect(setMinQuantity("NO-SUCH-SKU", 5)).rejects.toThrow(
+        "商品が見つかりません: SKU=NO-SUCH-SKU",
+      );
+    });
+
+    it("負数を指定するとエラーになる", async () => {
+      await addProduct(sampleInput);
+
+      await expect(setMinQuantity("TEST-001", -1)).rejects.toThrow(
+        "最低在庫数は0以上を指定してください",
+      );
     });
   });
 });
