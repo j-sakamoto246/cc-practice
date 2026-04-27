@@ -107,6 +107,44 @@ inventory accounting inventory-value
 inventory accounting export --from 2026-04-01 --to 2026-04-30 --output sales.csv
 ```
 
+## マイグレーション (migrate)
+
+スキーマ変更は `migrations/NNN_<name>.sql` で管理する。各ファイルは `-- +migrate Up` と `-- +migrate Down` のセクションを持ち、適用済みバージョンは `schema_migrations` テーブルで追跡される。
+
+```bash
+# 適用状況を確認 ([applied] / [pending])
+inventory migrate status
+
+# 未適用のマイグレーションを全て適用
+inventory migrate up
+
+# 直前に適用したマイグレーションを 1 段ロールバック
+inventory migrate down
+
+# 新規マイグレーションファイルを生成 (002_add_xxx.sql のテンプレートを作成)
+inventory migrate create add-xxx
+```
+
+> **補足**: 通常コマンド (`product add` 等) の起動時は `initDatabase()` が未適用マイグレーションを自動適用する。本番運用では明示的に `migrate up` を実行してから API サーバ等を起動するのが安全。`migrate down` は 1 段ずつのロールバックなので、複数戻したい場合は連続実行する。
+
+### マイグレーションファイルの書式
+
+```sql
+-- +migrate Up
+
+CREATE TABLE alerts (
+  id         TEXT PRIMARY KEY,
+  ...
+);
+CREATE INDEX idx_alerts_xxx ON alerts(xxx);
+
+-- +migrate Down
+
+DROP TABLE alerts;
+```
+
+各 migration は `BEGIN`/`COMMIT` で囲んで実行されるため、Up/Down が途中で失敗した場合は自動的にロールバックされる。
+
 ## 受注ステータスの遷移
 
 ```
