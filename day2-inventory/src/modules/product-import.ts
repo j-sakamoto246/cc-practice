@@ -16,6 +16,10 @@ export interface ParsedProductCsvRow extends AddProductInput {
 
 export async function importProductsFromCsv(filePath: string): Promise<ImportProductsResult> {
   const content = await readFile(filePath, "utf8");
+  return importProductsFromCsvText(content);
+}
+
+export async function importProductsFromCsvText(content: string): Promise<ImportProductsResult> {
   const rows = parseProductCsv(content);
 
   await validateNoDuplicateSkus(rows);

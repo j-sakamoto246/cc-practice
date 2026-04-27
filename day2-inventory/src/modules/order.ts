@@ -153,6 +153,77 @@ export async function updateOrderStatus(
   return (await getOrderById(id))! as Order;
 }
 
+export interface Shipment {
+  id: string;
+  order_id: string;
+  tracking_number: string;
+  carrier: string;
+  status: string;
+  shipped_at: string | null;
+  delivered_at: string | null;
+}
+
+export interface OrderDetail extends OrderWithItems {
+  shipments: Shipment[];
+}
+
+export async function getOrderDetail(id: string): Promise<OrderDetail | null> {
+  const order = await getOrderById(id);
+  if (!order) return null;
+
+  const client = getClient();
+  const shipmentsResult = await client.execute({
+    sql: "SELECT * FROM shipments WHERE order_id = ?",
+    args: [id],
+  });
+
+  const shipments: Shipment[] = shipmentsResult.rows.map((row) => ({
+    id: row["id"] as string,
+    order_id: row["order_id"] as string,
+    tracking_number: (row["tracking_number"] as string | null) ?? "",
+    carrier: row["carrier"] as string,
+    status: row["status"] as string,
+    shipped_at: (row["shipped_at"] as string | null) ?? null,
+    delivered_at: (row["delivered_at"] as string | null) ?? null,
+  }));
+
+  return { ...order, shipments };
+}
+
+export async function shipOrder(
+  orderId: string,
+  carrier: string,
+  trackingNumber: string,
+): Promise<Shipment> {
+  const client = getClient();
+
+  await updateOrderStatus(orderId, "shipped");
+
+  const shipmentId = generateId();
+  await client.execute({
+    sql: `INSERT INTO shipments (id, order_id, tracking_number, carrier, status, shipped_at)
+          VALUES (?, ?, ?, ?, 'shipped', datetime('now'))`,
+    args: [shipmentId, orderId, trackingNumber, carrier],
+  });
+
+  logger.info(`出荷しました: order=${orderId}, carrier=${carrier}, tracking=${trackingNumber}`);
+
+  const result = await client.execute({
+    sql: "SELECT * FROM shipments WHERE id = ?",
+    args: [shipmentId],
+  });
+  const row = result.rows[0]!;
+  return {
+    id: row["id"] as string,
+    order_id: row["order_id"] as string,
+    tracking_number: (row["tracking_number"] as string | null) ?? "",
+    carrier: row["carrier"] as string,
+    status: row["status"] as string,
+    shipped_at: (row["shipped_at"] as string | null) ?? null,
+    delivered_at: (row["delivered_at"] as string | null) ?? null,
+  };
+}
+
 async function getOrderById(id: string): Promise<OrderWithItems | null> {
   const client = getClient();
 
