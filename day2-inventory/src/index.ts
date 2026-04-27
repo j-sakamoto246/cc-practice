@@ -6,6 +6,7 @@ import { registerStockCommands } from "./cli/stock.cmd.js";
 import { registerOrderCommands } from "./cli/order.cmd.js";
 import { registerCampaignCommands } from "./cli/campaign.cmd.js";
 import { registerAccountingCommands } from "./cli/accounting.cmd.js";
+import { registerImportCommands } from "./cli/import.cmd.js";
 
 const program = new Command();
 
@@ -22,6 +23,7 @@ registerStockCommands(program);
 registerOrderCommands(program);
 registerCampaignCommands(program);
 registerAccountingCommands(program);
+registerImportCommands(program);
 
 program.parseAsync().catch((err: Error) => {
   console.error(`エラー: ${err.message}`);

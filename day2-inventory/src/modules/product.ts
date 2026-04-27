@@ -20,6 +20,7 @@ export interface AddProductInput {
   description?: string;
   price: number;
   cost: number;
+  minQuantity?: number;
 }
 
 export interface UpdateProductInput {
@@ -39,9 +40,17 @@ export async function addProduct(input: AddProductInput): Promise<Product> {
   }
 
   await client.execute({
-    sql: `INSERT INTO products (id, sku, name, description, price, cost)
-          VALUES (?, ?, ?, ?, ?, ?)`,
-    args: [id, input.sku, input.name, input.description ?? "", input.price, input.cost],
+    sql: `INSERT INTO products (id, sku, name, description, price, cost, min_quantity)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      id,
+      input.sku,
+      input.name,
+      input.description ?? "",
+      input.price,
+      input.cost,
+      input.minQuantity ?? 0,
+    ],
   });
 
   logger.info(`商品を追加しました: ${input.name} (SKU: ${input.sku})`);

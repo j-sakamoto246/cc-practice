@@ -24,6 +24,20 @@ inventory product update --sku "MBP-2024" --name "MacBook Pro M4" --cost 200000
 inventory product delete --sku "MBP-2024"
 ```
 
+## 一括インポート (import)
+
+```bash
+# 商品をCSVから一括インポート
+inventory import products --file products.csv
+```
+
+CSVヘッダー:
+
+```csv
+sku,name,price,cost,description,min_quantity
+MBP-2024,MacBook Pro,298000,200000,ノートPC,5
+```
+
 ## 在庫管理 (stock)
 
 ```bash
