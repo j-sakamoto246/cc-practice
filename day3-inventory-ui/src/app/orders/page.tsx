@@ -1,4 +1,5 @@
 import { ensureDb } from "@/lib/db-init";
+import { Profiler } from "@/lib/profiler";
 import { listOrderDetails } from "@/modules/order";
 import { listProducts } from "@/modules/product";
 
@@ -17,7 +18,9 @@ export default async function OrdersPage() {
         <p className="text-muted-foreground text-sm">受注の登録、確認、発送処理を行います。</p>
       </header>
 
-      <OrdersClient initialOrders={orders} products={products} />
+      <Profiler id="OrdersClient">
+        <OrdersClient initialOrders={orders} products={products} />
+      </Profiler>
     </main>
   );
 }

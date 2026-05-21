@@ -1,4 +1,5 @@
 import { ensureDb } from "@/lib/db-init";
+import { Profiler } from "@/lib/profiler";
 import { listProducts } from "@/modules/product";
 import { getAllStock, listStockMovements, listWarehouses } from "@/modules/stock";
 
@@ -16,11 +17,13 @@ export default async function StockPage() {
   ]);
 
   return (
-    <StockClient
-      products={products}
-      warehouses={warehouses}
-      initialStock={stock}
-      initialMovements={movements}
-    />
+    <Profiler id="StockClient">
+      <StockClient
+        products={products}
+        warehouses={warehouses}
+        initialStock={stock}
+        initialMovements={movements}
+      />
+    </Profiler>
   );
 }

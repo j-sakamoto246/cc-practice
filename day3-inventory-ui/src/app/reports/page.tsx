@@ -1,4 +1,5 @@
 import { ensureDb } from "@/lib/db-init";
+import { Profiler } from "@/lib/profiler";
 import { calculateInventoryValue } from "@/modules/accounting";
 
 import { ReportsClient } from "./reports-client";
@@ -17,7 +18,9 @@ export default async function ReportsPage() {
           売上・在庫評価の集計と、CSV ダウンロードを行います。
         </p>
       </header>
-      <ReportsClient initialValuation={valuation} />
+      <Profiler id="ReportsClient">
+        <ReportsClient initialValuation={valuation} />
+      </Profiler>
     </main>
   );
 }

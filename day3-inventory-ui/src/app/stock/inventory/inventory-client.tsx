@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { AlertTriangleIcon, BoxesIcon, CheckCircle2Icon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -132,37 +132,9 @@ export function InventoryClient({ products, warehouses, stock }: Props) {
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((r) => {
-                  const low = r.min_quantity > 0 && r.quantity < r.min_quantity;
-                  return (
-                    <TableRow key={`${r.product_id}-${r.warehouse_id}`}>
-                      <TableCell className="text-muted-foreground pl-4 font-mono text-xs">
-                        {r.sku}
-                      </TableCell>
-                      <TableCell className="font-medium">{r.product_name}</TableCell>
-                      <TableCell className="whitespace-nowrap">{r.warehouse_name}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {num.format(r.quantity)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {num.format(r.min_quantity)}
-                      </TableCell>
-                      <TableCell className="pr-4">
-                        {low ? (
-                          <Badge variant="outline" className="gap-1">
-                            <AlertTriangleIcon className="size-3" />
-                            要発注
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" className="gap-1">
-                            <CheckCircle2Icon className="size-3" />
-                            OK
-                          </Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
+                filtered.map((r) => (
+                  <InventoryRowItem key={`${r.product_id}-${r.warehouse_id}`} row={r} />
+                ))
               )}
             </TableBody>
           </Table>
@@ -171,3 +143,29 @@ export function InventoryClient({ products, warehouses, stock }: Props) {
     </Card>
   );
 }
+
+const InventoryRowItem = memo(function InventoryRowItem({ row }: { row: InventoryRow }) {
+  const low = row.min_quantity > 0 && row.quantity < row.min_quantity;
+  return (
+    <TableRow>
+      <TableCell className="text-muted-foreground pl-4 font-mono text-xs">{row.sku}</TableCell>
+      <TableCell className="font-medium">{row.product_name}</TableCell>
+      <TableCell className="whitespace-nowrap">{row.warehouse_name}</TableCell>
+      <TableCell className="text-right tabular-nums">{num.format(row.quantity)}</TableCell>
+      <TableCell className="text-right tabular-nums">{num.format(row.min_quantity)}</TableCell>
+      <TableCell className="pr-4">
+        {low ? (
+          <Badge variant="outline" className="gap-1">
+            <AlertTriangleIcon className="size-3" />
+            要発注
+          </Badge>
+        ) : (
+          <Badge variant="secondary" className="gap-1">
+            <CheckCircle2Icon className="size-3" />
+            OK
+          </Badge>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+});

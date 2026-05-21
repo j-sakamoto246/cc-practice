@@ -4,6 +4,8 @@
 
 現状は Next.js App Router を Node.js 環境で動かし、`@libsql/client` で `file:data/inventory.db` を開いています。Workers + D1 ではローカルファイル DB ではなく、Worker binding 経由の D1 Database を使うため、主に DB 接続層とデプロイ設定の変更が必要です。
 
+> **前提**: 本アプリは PWA (Serwist) を組み込んでおり、`next build --webpack` が必須です (Turbopack は `@serwist/next` と非互換)。OpenNext 経由のビルドも webpack で実行する必要があります。Service Worker (`public/sw.js`) は静的アセットとして配信されるため、Workers 環境でも `assets` バインディング経由でそのまま提供できます。
+
 ## 推奨方針
 
 Next.js は Cloudflare Workers 上で `@opennextjs/cloudflare` adapter を使って動かす。
@@ -41,15 +43,15 @@ npm install -D wrangler @opennextjs/cloudflare
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": ".open-next/assets",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "inventory-ui",
-      "database_id": "replace-with-cloudflare-d1-database-id"
-    }
-  ]
+      "database_id": "replace-with-cloudflare-d1-database-id",
+    },
+  ],
 }
 ```
 
@@ -100,14 +102,15 @@ function createD1Client(db: D1Database): AppDbClient {
     async execute(input) {
       const sql = typeof input === "string" ? input : input.sql;
       const args = typeof input === "string" ? [] : (input.args ?? []);
-      const result = await db.prepare(sql).bind(...args).all();
+      const result = await db
+        .prepare(sql)
+        .bind(...args)
+        .all();
       return { rows: result.results as Record<string, unknown>[] };
     },
     async batch(statements) {
       return db.batch(
-        statements.map((statement) =>
-          db.prepare(statement.sql).bind(...(statement.args ?? [])),
-        ),
+        statements.map((statement) => db.prepare(statement.sql).bind(...(statement.args ?? []))),
       );
     },
   };
@@ -211,6 +214,9 @@ Cloudflare Workers で Next.js を動かすには OpenNext adapter の制約に�
 - `next/font/google` が Cloudflare build で問題なく処理されるか確認する
 - Worker bundle size limit に収まるか確認する
 - `server-only` import が OpenNext build で問題ないか確認する
+- **`@serwist/next` の webpack 必須制約**: OpenNext のビルドコマンドが内部で `next build` を呼ぶ場合、`--webpack` フラグが渡るように `package.json` または OpenNext 設定を調整する (Turbopack ではビルドが失敗する)
+- **Service Worker の配信**: `public/sw.js` は `assets` バインディング経由で配信されるため、`Service-Worker-Allowed: /` ヘッダーが付与されることを確認する (現在 `next.config.ts` の `headers()` で設定済み)
+- **PWA Manifest**: `/manifest.webmanifest` は Next.js が動的ルートとして配信するため、Workers runtime でも問題なく動作するはず
 
 ## 移行作業チェックリスト
 
@@ -221,9 +227,11 @@ Cloudflare Workers で Next.js を動かすには OpenNext adapter の制約に�
 5. `src/db/client.ts` に D1 adapter を追加
 6. 本番では `initDatabase()` の自動 migration を止める
 7. seed SQL または D1 用 seed script を追加
-8. `npm run preview:cf` で Workers runtime をローカル確認
-9. 商品、在庫、受注、発送の CRUD/API を一通り確認
-10. `npm run deploy:cf` で Cloudflare にデプロイ
+8. OpenNext ビルドが webpack で実行されることを確認 (PWA / Serwist の制約)
+9. `npm run preview:cf` で Workers runtime をローカル確認
+10. SW・Manifest・オフラインフォールバック・バックグラウンド同期が Workers 上でも動作することを確認
+11. 商品、在庫、受注、発送の CRUD/API を一通り確認
+12. `npm run deploy:cf` で Cloudflare にデプロイ
 
 ## 最終判断
 

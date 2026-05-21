@@ -2,9 +2,10 @@
 
 import { useEffect } from "react";
 
-export function AxeInit() {
+const IS_DEV = process.env.NODE_ENV !== "production";
+
+function AxeInitDev() {
   useEffect(() => {
-    if (process.env.NODE_ENV === "production") return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -50,3 +51,9 @@ export function AxeInit() {
 
   return null;
 }
+
+function AxeInitNoop() {
+  return null;
+}
+
+export const AxeInit = IS_DEV ? AxeInitDev : AxeInitNoop;

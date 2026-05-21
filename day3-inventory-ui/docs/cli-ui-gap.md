@@ -11,44 +11,45 @@
 - `src/app/api/**`
 - `src/modules/**`
 
-## 未実装 / 不足している機能
+## 実装済み
 
-| CLI コマンド | UI / API 側の状況 |
-| --- | --- |
-| `inventory import products --file` | CSV 商品インポート画面/API がない。`src/modules/product-import.ts` は存在するが未露出。 |
-| `inventory product set-lead-time` | リードタイム更新 UI/API がない。`setLeadTime()` は存在する。 |
-| `inventory stock transfer` | 倉庫間移動 UI/API がない。`stockTransfer()` は存在する。 |
-| `inventory stock lots` | ロット一覧 UI/API がない。`listLots()` は存在する。 |
-| `inventory stock expiring` | 期限切れ/期限間近ロット UI/API がない。`getExpiringLots()` は存在する。 |
-| `inventory stock in --lot-code --expiry` | 入庫 UI/API はあるが、ロットコードと期限の入力に対応していない。 |
-| `inventory stock set-threshold` | 既存商品の最低在庫数更新 UI/API がない。商品追加時の `minQuantity` はあるが、編集画面では更新できない。 |
-| `inventory stock status` | `/api/stock` は在庫一覧を返すが、UI に現在庫一覧として表示されていない。 |
-| `inventory campaign create/list/apply` | キャンペーン管理 UI/API がない。`src/modules/campaign.ts` は存在する。 |
-| `inventory accounting report` | 売上レポート UI/API がない。ダッシュボードには簡易売上グラフのみある。 |
-| `inventory accounting inventory-value` | ダッシュボードに総在庫金額はあるが、CLI 相当の明細付き在庫評価 UI/API はない。 |
-| `inventory accounting export` | 売上データ CSV エクスポート UI/API がない。 |
-| `inventory forecast` | 需要予測/発注推奨 UI/API がない。`src/modules/forecast.ts` は存在する。 |
-| `inventory migrate up/down/status/create` | マイグレーション管理 UI/API がない。Next.js 側では起動時自動マイグレーションのみ。 |
-| `inventory serve` | CLI としての REST サーバ起動コマンドはない。Next.js アプリの `npm run dev` / `npm run start` に置き換わっている扱い。 |
+| CLI コマンド                             | UI / API 側の状況                                                                                       |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `inventory product add`                  | 商品追加 UI/API あり。                                                                                  |
+| `inventory product list`                 | 商品一覧 UI/API あり。                                                                                  |
+| `inventory product update`               | 商品編集 UI/API あり (`minQuantity` / `leadTimeDays` も編集可)。                                        |
+| `inventory product delete`               | 商品削除 UI/API あり。                                                                                  |
+| `inventory product set-lead-time`        | 商品編集ダイアログでリードタイムを変更可能。`PATCH /api/products/[id]` が `leadTimeDays` を受け付ける。 |
+| `inventory stock in`                     | 入庫 UI/API あり。`POST /api/stock` が `lot_code` / `expiry_date` も受け付け、ロット入庫に対応。        |
+| `inventory stock in --lot-code --expiry` | 入庫ダイアログでロットコードと期限を入力可能。                                                          |
+| `inventory stock out`                    | 出庫 UI/API あり。                                                                                      |
+| `inventory stock status`                 | `/api/stock` で在庫一覧、`/stock` ページ + `/stock/inventory` で UI 表示。                              |
+| `inventory stock alerts`                 | ダッシュボードに在庫アラート表示あり (`/api/dashboard/alerts`)。                                        |
+| `inventory stock set-threshold`          | 商品編集ダイアログで最低在庫を変更可能。`PATCH /api/products/[id]` が `minQuantity` を受け付ける。      |
+| `inventory stock transfer`               | `/stock/transfer` ページ + `POST /api/stock/transfer` あり。                                            |
+| `inventory stock lots`                   | `/stock/lots` ページ + `GET /api/stock/lots` あり。                                                     |
+| `inventory stock expiring`               | `GET /api/stock/expiring` あり (UI は `/stock/lots` 内に組み込み)。                                     |
+| `inventory order create`                 | 受注作成 UI/API あり。                                                                                  |
+| `inventory order list`                   | 受注一覧 UI/API あり。                                                                                  |
+| `inventory order status`                 | 受注詳細表示とステータス変更 UI/API あり (`/api/orders/[id]`)。                                         |
+| `inventory order ship`                   | 発送処理 UI/API あり (`/api/orders/[id]/ship`)。                                                        |
+| `inventory import products --file`       | `/products/import` 画面 + `POST /api/products/import` で CSV インポートに対応。                         |
+| `inventory campaign create/list/apply`   | `/campaigns` ページ + `/api/campaigns` / `/api/campaigns/apply` あり。                                  |
+| `inventory accounting report`            | `/reports` + `GET /api/reports/sales-report` あり。                                                     |
+| `inventory accounting inventory-value`   | `GET /api/reports/inventory-value` + `/reports` 内で表示。                                              |
+| `inventory accounting export`            | `GET /api/reports/export` / `/api/reports/inventory-export` で CSV エクスポート可能。                   |
+| `inventory forecast`                     | `/forecast` ページ + `GET /api/forecast` あり (需要予測 + 発注推奨)。                                   |
 
-## 実装済みに見える機能
+## 未実装 / 差分が残る項目
 
-| CLI コマンド | UI / API 側の状況 |
-| --- | --- |
-| `inventory product add` | 商品追加 UI/API あり。 |
-| `inventory product list` | 商品一覧 UI/API あり。 |
-| `inventory product update` | 商品編集 UI/API あり。ただし最低在庫数とリードタイムは編集不可。 |
-| `inventory product delete` | 商品削除 UI/API あり。 |
-| `inventory stock in` | 入庫 UI/API あり。ただしロット情報は未対応。 |
-| `inventory stock out` | 出庫 UI/API あり。 |
-| `inventory stock alerts` | ダッシュボードに在庫アラート表示あり。 |
-| `inventory order create` | 受注作成 UI/API あり。 |
-| `inventory order list` | 受注一覧 UI/API あり。 |
-| `inventory order status` | 受注詳細表示とステータス変更 UI/API あり。 |
-| `inventory order ship` | 発送処理 UI/API あり。 |
+| CLI コマンド                                            | UI / API 側の状況                                                                                                 |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `inventory migrate up/down/status/create`               | マイグレーション管理 UI/API はない。起動時に `initDatabase()` が冪等に実行するのみ。                              |
+| `inventory serve`                                       | CLI としての REST サーバ起動コマンドはない。Next.js アプリの `npm run dev` / `npm start` に置き換わっている扱い。 |
+| 受注一覧の `--status` / `--customer` 相当               | UI 上のクライアント絞り込みとして実装されているが、`GET /api/orders` 側にクエリパラメータは未実装。               |
+| 商品一覧 `--format json` や会計レポート `--format json` | UI 経由では用途がないため未対応。外部連携 API として必要なら別途設計が必要。                                      |
 
 ## 補足
 
-- 注文一覧の `--status` / `--customer` 相当は UI 上のクライアント絞り込みとして実装されているが、API クエリとしては未実装。
-- 商品一覧の `--format json` や会計レポートの `--format json` のような CLI 出力形式オプションは、UI では直接対応不要とみなせる。ただし外部連携 API として必要なら別途設計が必要。
-- `src/modules/**` には day2 のビジネスロジックが多く移植済みなので、未実装の多くは API Route と画面の追加で露出できる状態。
+- `src/modules/**` の day2 由来ビジネスロジックは大半が API Route + UI から呼ばれており、未露出のロジックはほぼ残っていない。
+- マイグレーションは `src/db/migrator.ts` が起動時に自動適用する。手動制御が必要なら CLI 復活より `scripts/` 配下にユーティリティ追加が現実的。

@@ -3,6 +3,7 @@ import { UploadIcon } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { ensureDb } from "@/lib/db-init";
+import { Profiler } from "@/lib/profiler";
 import { listProducts } from "@/modules/product";
 
 import { ProductsClient } from "./products-client";
@@ -26,7 +27,9 @@ export default async function ProductsPage() {
         </Link>
       </header>
 
-      <ProductsClient initialProducts={products} />
+      <Profiler id="ProductsClient">
+        <ProductsClient initialProducts={products} />
+      </Profiler>
     </main>
   );
 }
