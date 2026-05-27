@@ -156,6 +156,7 @@ export async function stockOut(input: StockOutInput): Promise<StockMovement> {
   const referenceId = input.reference_id ?? "";
   const movementIds: string[] = [];
   let allocations: LotAllocation[] = [];
+  let firstMovement: StockMovement | undefined;
 
   // FIFO 引当 (SELECT) と在庫減算 (UPDATE/INSERT) を 1 トランザクションで原子化。
   // 並行 stockOut が同じロットを二重に引き当ててマイナス在庫になるのを防ぐ。
@@ -190,6 +191,15 @@ export async function stockOut(input: StockOutInput): Promise<StockMovement> {
             WHERE product_id = ? AND warehouse_id = ?`,
       args: [input.quantity, input.product_id, input.warehouse_id],
     });
+
+    // commit 後に別接続から SELECT すると libsql の file バックエンドでは行が見えないことが
+    // あるため、trx 内で読み出してから commit する。
+    const firstResult = await trx.execute({
+      sql: "SELECT * FROM stock_movements WHERE id = ?",
+      args: [movementIds[0]!],
+    });
+    firstMovement = rowToMovement(firstResult.rows[0]!);
+
     await trx.commit();
   } catch (err) {
     if (!trx.closed) await trx.rollback();
@@ -200,14 +210,8 @@ export async function stockOut(input: StockOutInput): Promise<StockMovement> {
     `出庫しました: product=${input.product_id}, warehouse=${input.warehouse_id}, quantity=${input.quantity}, lots=${allocations.length}`,
   );
 
-  const firstId = movementIds[0]!;
-  const result = await client.execute({
-    sql: "SELECT * FROM stock_movements WHERE id = ?",
-    args: [firstId],
-  });
-  const first = rowToMovement(result.rows[0]!);
   return {
-    ...first,
+    ...firstMovement!,
     quantity: input.quantity,
     lot_id: allocations.length === 1 ? allocations[0]!.lot_id : null,
   };
@@ -231,6 +235,8 @@ export async function stockTransfer(input: StockTransferInput): Promise<StockTra
   const outMovementIds: string[] = [];
   const inMovementIds: string[] = [];
   let allocations: LotAllocation[] = [];
+  let outFirst: StockMovement | undefined;
+  let inFirst: StockMovement | undefined;
 
   // 移動元の FIFO 引当と両倉庫の在庫更新を 1 トランザクションで原子化。
   const trx = await client.transaction("write");
@@ -315,6 +321,19 @@ export async function stockTransfer(input: StockTransferInput): Promise<StockTra
       ],
     });
 
+    // commit 後に別接続から SELECT すると libsql の file バックエンドでは行が見えないことが
+    // あるため、trx 内で読み出してから commit する。
+    const outResult = await trx.execute({
+      sql: "SELECT * FROM stock_movements WHERE id = ?",
+      args: [outMovementIds[0]!],
+    });
+    const inResult = await trx.execute({
+      sql: "SELECT * FROM stock_movements WHERE id = ?",
+      args: [inMovementIds[0]!],
+    });
+    outFirst = rowToMovement(outResult.rows[0]!);
+    inFirst = rowToMovement(inResult.rows[0]!);
+
     await trx.commit();
   } catch (err) {
     if (!trx.closed) await trx.rollback();
@@ -325,18 +344,16 @@ export async function stockTransfer(input: StockTransferInput): Promise<StockTra
     `在庫移動しました: product=${input.product_id}, from=${input.from_warehouse_id}, to=${input.to_warehouse_id}, quantity=${input.quantity}, lots=${allocations.length}`,
   );
 
-  const outFirst = await fetchMovement(outMovementIds[0]!);
-  const inFirst = await fetchMovement(inMovementIds[0]!);
   return {
     out: {
-      ...outFirst,
+      ...outFirst!,
       quantity: input.quantity,
-      lot_id: allocations.length === 1 ? outFirst.lot_id : null,
+      lot_id: allocations.length === 1 ? outFirst!.lot_id : null,
     },
     in: {
-      ...inFirst,
+      ...inFirst!,
       quantity: input.quantity,
-      lot_id: allocations.length === 1 ? inFirst.lot_id : null,
+      lot_id: allocations.length === 1 ? inFirst!.lot_id : null,
     },
   };
 }
@@ -379,15 +396,6 @@ async function selectFifoLotsTx(
     throw new InsufficientStockError(total, qty);
   }
   return allocations;
-}
-
-async function fetchMovement(id: string): Promise<StockMovement> {
-  const client = getClient();
-  const result = await client.execute({
-    sql: "SELECT * FROM stock_movements WHERE id = ?",
-    args: [id],
-  });
-  return rowToMovement(result.rows[0]!);
 }
 
 export async function getWarehouseByName(name: string) {
