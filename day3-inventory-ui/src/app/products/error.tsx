@@ -17,7 +17,7 @@ export default function ProductsError({
   }, [error]);
 
   return (
-    <main className="container mx-auto flex flex-1 flex-col gap-4 px-4 py-8">
+    <main id="main-content" className="container mx-auto flex flex-1 flex-col gap-4 px-4 py-8">
       <div
         role="alert"
         className="border-destructive/30 bg-destructive/5 text-destructive flex flex-col gap-3 rounded-lg border p-4"

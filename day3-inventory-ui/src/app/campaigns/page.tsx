@@ -11,7 +11,7 @@ export default async function CampaignsPage() {
   const [campaigns, orders] = await Promise.all([listCampaigns(), listOrders()]);
 
   return (
-    <main className="container mx-auto flex flex-1 flex-col gap-6 px-4 py-8">
+    <main id="main-content" className="container mx-auto flex flex-1 flex-col gap-6 px-4 py-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">キャンペーン管理</h1>
         <p className="text-muted-foreground text-sm">

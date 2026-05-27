@@ -15,7 +15,7 @@ export default async function ProductsPage() {
   const products = await listProducts();
 
   return (
-    <main className="container mx-auto flex flex-1 flex-col gap-6 px-4 py-8">
+    <main id="main-content" className="container mx-auto flex flex-1 flex-col gap-6 px-4 py-8">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold tracking-tight">商品管理</h1>

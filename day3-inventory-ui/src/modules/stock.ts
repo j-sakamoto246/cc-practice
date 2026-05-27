@@ -1,4 +1,4 @@
-import type { InValue } from "@libsql/client";
+import type { InStatement, InValue, ResultSet } from "@libsql/client";
 import { getClient } from "../db/client";
 import { InsufficientStockError } from "../errors/insufficient-stock";
 import { generateId } from "../utils/id";
@@ -152,42 +152,49 @@ export async function stockOut(input: StockOutInput): Promise<StockMovement> {
     throw new Error("出庫数量は1以上を指定してください");
   }
 
-  const allocations = await selectFifoLots(input.product_id, input.warehouse_id, input.quantity);
-
-  const movementIds: string[] = [];
-  const statements = [];
   const referenceType = input.reference_type ?? "";
   const referenceId = input.reference_id ?? "";
+  const movementIds: string[] = [];
+  let allocations: LotAllocation[] = [];
 
-  for (const alloc of allocations) {
-    const movementId = generateId();
-    movementIds.push(movementId);
-    statements.push({
-      sql: `UPDATE stock_lots SET quantity_remaining = quantity_remaining - ?, updated_at = datetime('now')
-            WHERE id = ?`,
-      args: [alloc.consume, alloc.lot_id] as InValue[],
+  // FIFO 引当 (SELECT) と在庫減算 (UPDATE/INSERT) を 1 トランザクションで原子化。
+  // 並行 stockOut が同じロットを二重に引き当ててマイナス在庫になるのを防ぐ。
+  const trx = await client.transaction("write");
+  try {
+    allocations = await selectFifoLotsTx(trx, input.product_id, input.warehouse_id, input.quantity);
+
+    for (const alloc of allocations) {
+      const movementId = generateId();
+      movementIds.push(movementId);
+      await trx.execute({
+        sql: `UPDATE stock_lots SET quantity_remaining = quantity_remaining - ?, updated_at = datetime('now')
+              WHERE id = ?`,
+        args: [alloc.consume, alloc.lot_id],
+      });
+      await trx.execute({
+        sql: `INSERT INTO stock_movements (id, product_id, warehouse_id, type, quantity, lot_id, reference_type, reference_id)
+              VALUES (?, ?, ?, 'out', ?, ?, ?, ?)`,
+        args: [
+          movementId,
+          input.product_id,
+          input.warehouse_id,
+          alloc.consume,
+          alloc.lot_id,
+          referenceType,
+          referenceId,
+        ],
+      });
+    }
+    await trx.execute({
+      sql: `UPDATE inventory SET quantity = quantity - ?, updated_at = datetime('now')
+            WHERE product_id = ? AND warehouse_id = ?`,
+      args: [input.quantity, input.product_id, input.warehouse_id],
     });
-    statements.push({
-      sql: `INSERT INTO stock_movements (id, product_id, warehouse_id, type, quantity, lot_id, reference_type, reference_id)
-            VALUES (?, ?, ?, 'out', ?, ?, ?, ?)`,
-      args: [
-        movementId,
-        input.product_id,
-        input.warehouse_id,
-        alloc.consume,
-        alloc.lot_id,
-        referenceType,
-        referenceId,
-      ] as InValue[],
-    });
+    await trx.commit();
+  } catch (err) {
+    if (!trx.closed) await trx.rollback();
+    throw err;
   }
-  statements.push({
-    sql: `UPDATE inventory SET quantity = quantity - ?, updated_at = datetime('now')
-          WHERE product_id = ? AND warehouse_id = ?`,
-    args: [input.quantity, input.product_id, input.warehouse_id] as InValue[],
-  });
-
-  await client.batch(statements);
 
   logger.info(
     `出庫しました: product=${input.product_id}, warehouse=${input.warehouse_id}, quantity=${input.quantity}, lots=${allocations.length}`,
@@ -217,90 +224,102 @@ export async function stockTransfer(input: StockTransferInput): Promise<StockTra
     throw new Error("移動元と移動先には異なる倉庫を指定してください");
   }
 
-  const allocations = await selectFifoLots(
-    input.product_id,
-    input.from_warehouse_id,
-    input.quantity,
-  );
-
   const transferId = input.reference_id || generateId();
   const referenceType = input.reference_type ?? "transfer";
   const toInventoryId = generateId();
 
   const outMovementIds: string[] = [];
   const inMovementIds: string[] = [];
-  const statements: { sql: string; args: InValue[] }[] = [];
+  let allocations: LotAllocation[] = [];
 
-  for (const alloc of allocations) {
-    const outMovementId = generateId();
-    const inMovementId = generateId();
-    const newLotId = generateId();
-    outMovementIds.push(outMovementId);
-    inMovementIds.push(inMovementId);
+  // 移動元の FIFO 引当と両倉庫の在庫更新を 1 トランザクションで原子化。
+  const trx = await client.transaction("write");
+  try {
+    allocations = await selectFifoLotsTx(
+      trx,
+      input.product_id,
+      input.from_warehouse_id,
+      input.quantity,
+    );
 
-    // 移動元: ロット減算 → out 履歴
-    statements.push({
-      sql: `UPDATE stock_lots SET quantity_remaining = quantity_remaining - ?, updated_at = datetime('now')
-            WHERE id = ?`,
-      args: [alloc.consume, alloc.lot_id],
+    for (const alloc of allocations) {
+      const outMovementId = generateId();
+      const inMovementId = generateId();
+      const newLotId = generateId();
+      outMovementIds.push(outMovementId);
+      inMovementIds.push(inMovementId);
+
+      await trx.execute({
+        sql: `UPDATE stock_lots SET quantity_remaining = quantity_remaining - ?, updated_at = datetime('now')
+              WHERE id = ?`,
+        args: [alloc.consume, alloc.lot_id],
+      });
+      await trx.execute({
+        sql: `INSERT INTO stock_movements (id, product_id, warehouse_id, type, quantity, lot_id, reference_type, reference_id)
+              VALUES (?, ?, ?, 'out', ?, ?, ?, ?)`,
+        args: [
+          outMovementId,
+          input.product_id,
+          input.from_warehouse_id,
+          alloc.consume,
+          alloc.lot_id,
+          referenceType,
+          transferId,
+        ],
+      });
+
+      await trx.execute({
+        sql: `INSERT INTO stock_lots (id, product_id, warehouse_id, lot_code, quantity_remaining, expiry_date, received_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          newLotId,
+          input.product_id,
+          input.to_warehouse_id,
+          alloc.lot_code,
+          alloc.consume,
+          alloc.expiry_date,
+          new Date().toISOString(),
+        ],
+      });
+      await trx.execute({
+        sql: `INSERT INTO stock_movements (id, product_id, warehouse_id, type, quantity, lot_id, reference_type, reference_id)
+              VALUES (?, ?, ?, 'in', ?, ?, ?, ?)`,
+        args: [
+          inMovementId,
+          input.product_id,
+          input.to_warehouse_id,
+          alloc.consume,
+          newLotId,
+          referenceType,
+          transferId,
+        ],
+      });
+    }
+
+    await trx.execute({
+      sql: `UPDATE inventory SET quantity = quantity - ?, updated_at = datetime('now')
+            WHERE product_id = ? AND warehouse_id = ?`,
+      args: [input.quantity, input.product_id, input.from_warehouse_id],
     });
-    statements.push({
-      sql: `INSERT INTO stock_movements (id, product_id, warehouse_id, type, quantity, lot_id, reference_type, reference_id)
-            VALUES (?, ?, ?, 'out', ?, ?, ?, ?)`,
+    await trx.execute({
+      sql: `INSERT INTO inventory (id, product_id, warehouse_id, quantity)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(product_id, warehouse_id)
+            DO UPDATE SET quantity = quantity + ?, updated_at = datetime('now')`,
       args: [
-        outMovementId,
-        input.product_id,
-        input.from_warehouse_id,
-        alloc.consume,
-        alloc.lot_id,
-        referenceType,
-        transferId,
-      ],
-    });
-
-    // 移動先: 期限を引き継いだ新規ロット → in 履歴
-    statements.push({
-      sql: `INSERT INTO stock_lots (id, product_id, warehouse_id, lot_code, quantity_remaining, expiry_date, received_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      args: [
-        newLotId,
+        toInventoryId,
         input.product_id,
         input.to_warehouse_id,
-        alloc.lot_code,
-        alloc.consume,
-        alloc.expiry_date,
-        new Date().toISOString(),
+        input.quantity,
+        input.quantity,
       ],
     });
-    statements.push({
-      sql: `INSERT INTO stock_movements (id, product_id, warehouse_id, type, quantity, lot_id, reference_type, reference_id)
-            VALUES (?, ?, ?, 'in', ?, ?, ?, ?)`,
-      args: [
-        inMovementId,
-        input.product_id,
-        input.to_warehouse_id,
-        alloc.consume,
-        newLotId,
-        referenceType,
-        transferId,
-      ],
-    });
+
+    await trx.commit();
+  } catch (err) {
+    if (!trx.closed) await trx.rollback();
+    throw err;
   }
-
-  statements.push({
-    sql: `UPDATE inventory SET quantity = quantity - ?, updated_at = datetime('now')
-          WHERE product_id = ? AND warehouse_id = ?`,
-    args: [input.quantity, input.product_id, input.from_warehouse_id],
-  });
-  statements.push({
-    sql: `INSERT INTO inventory (id, product_id, warehouse_id, quantity)
-          VALUES (?, ?, ?, ?)
-          ON CONFLICT(product_id, warehouse_id)
-          DO UPDATE SET quantity = quantity + ?, updated_at = datetime('now')`,
-    args: [toInventoryId, input.product_id, input.to_warehouse_id, input.quantity, input.quantity],
-  });
-
-  await client.batch(statements);
 
   logger.info(
     `在庫移動しました: product=${input.product_id}, from=${input.from_warehouse_id}, to=${input.to_warehouse_id}, quantity=${input.quantity}, lots=${allocations.length}`,
@@ -322,13 +341,17 @@ export async function stockTransfer(input: StockTransferInput): Promise<StockTra
   };
 }
 
-async function selectFifoLots(
+interface StatementExecutor {
+  execute(stmt: InStatement): Promise<ResultSet>;
+}
+
+async function selectFifoLotsTx(
+  exec: StatementExecutor,
   productId: string,
   warehouseId: string,
   qty: number,
 ): Promise<LotAllocation[]> {
-  const client = getClient();
-  const result = await client.execute({
+  const result = await exec.execute({
     sql: `SELECT id, lot_code, expiry_date, quantity_remaining
           FROM stock_lots
           WHERE product_id = ? AND warehouse_id = ? AND quantity_remaining > 0

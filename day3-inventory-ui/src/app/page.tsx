@@ -49,7 +49,7 @@ export default async function DashboardPage() {
   ]);
 
   return (
-    <main className="container mx-auto flex flex-1 flex-col gap-6 px-4 py-8">
+    <main id="main-content" className="container mx-auto flex flex-1 flex-col gap-6 px-4 py-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">ダッシュボード</h1>
         <p className="text-muted-foreground text-sm">在庫の概況と直近の動きを確認します。</p>
