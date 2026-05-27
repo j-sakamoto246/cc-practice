@@ -65,3 +65,6 @@ storybook-static
 
 # Lighthouse temporary Chrome profile (created in error inside the repo)
 /\\\\wsl.localhost\\Ubuntu\\tmp\\lh-chrome-profile/
+
+# k6 load test reports (generated, do not commit)
+/load-tests/reports/

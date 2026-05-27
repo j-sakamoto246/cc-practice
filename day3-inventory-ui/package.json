@@ -21,7 +21,15 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "test:storybook": "test-storybook",
-    "chromatic": "chromatic --exit-zero-on-changes"
+    "chromatic": "chromatic --exit-zero-on-changes",
+    "loadtest:db:reset": "rm -f data/load-test.db* && DATABASE_URL=file:./data/load-test.db node scripts/seed-dummy.mjs",
+    "loadtest:server": "DATABASE_URL=file:./data/load-test.db next dev --webpack --port 3200",
+    "loadtest:server:prod": "DATABASE_URL=file:./data/load-test.db next start --port 3200",
+    "loadtest:smoke": "mkdir -p load-tests/reports && SCENARIO_NAME=smoke k6 run load-tests/scenarios/smoke.js",
+    "loadtest:products": "mkdir -p load-tests/reports && SCENARIO_NAME=products-list k6 run load-tests/scenarios/products-list.js",
+    "loadtest:stock": "mkdir -p load-tests/reports && SCENARIO_NAME=stock-operations k6 run load-tests/scenarios/stock-operations.js",
+    "loadtest:orders": "mkdir -p load-tests/reports && SCENARIO_NAME=order-creation k6 run load-tests/scenarios/order-creation.js",
+    "loadtest": "mkdir -p load-tests/reports && SCENARIO_NAME=full-suite k6 run load-tests/scenarios/full-suite.js"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

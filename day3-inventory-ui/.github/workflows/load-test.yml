@@ -1,0 +1,70 @@
+name: Load test
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 実行する k6 シナリオ
+        type: choice
+        required: true
+        default: smoke
+        options:
+          - smoke
+          - products-list
+          - stock-operations
+          - order-creation
+          - full-suite
+
+jobs:
+  k6:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Reset load-test DB and seed
+        run: npm run loadtest:db:reset
+
+      - name: Build (production)
+        run: npm run build
+
+      - name: Start server (background)
+        run: |
+          npm run loadtest:server:prod &
+          echo $! > .loadtest-server.pid
+          npx --yes wait-on -t 60000 http://127.0.0.1:3200/api/products
+
+      - name: Run k6 scenario
+        run: |
+          mkdir -p load-tests/reports
+          SCENARIO_NAME=${{ inputs.scenario }} k6 run load-tests/scenarios/${{ inputs.scenario }}.js
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f .loadtest-server.pid ]; then
+            kill $(cat .loadtest-server.pid) || true
+          fi
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-${{ inputs.scenario }}-${{ github.run_id }}
+          path: |
+            load-tests/reports/*.html
+            load-tests/reports/*.json
+          if-no-files-found: warn
+          retention-days: 14
